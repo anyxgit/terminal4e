@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>terminal4e</title>
+  <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css" />
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #1e1e1e;
+      overflow: hidden;
+    }
+    #terminal {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="node_modules/@xterm/addon-image/lib/addon-image.js"></script>
+  <script src="node_modules/@xterm/addon-progress/lib/addon-progress.js"></script>
+  <script src="node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
+  <script src="node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+  <script>
+    (function () {
+      const term = new Terminal({
+        cursorBlink: true,
+        convertEol: true,
+        theme: {
+          background: '#1e1e1e'
+        },
+        allowProposedApi: true
+      });
+      const fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+
+      const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+      term.loadAddon(unicode11Addon);
+      term.unicode.activeVersion = '11';
+
+      const webLinksAddon = new WebLinksAddon.WebLinksAddon(function (event, uri) {
+        if (!event || !(event.ctrlKey || event.metaKey)) {
+          return;
+        }
+        if (window.terminal4eOpenLink) {
+          window.terminal4eOpenLink(uri);
+          return;
+        }
+        window.open(uri, '_blank', 'noopener');
+      });
+      term.loadAddon(webLinksAddon);
+
+      const imageAddon = new ImageAddon.ImageAddon();
+      term.loadAddon(imageAddon);
+
+      const progressAddon = new ProgressAddon.ProgressAddon();
+      term.loadAddon(progressAddon);
+
+      const terminalElement = document.getElementById('terminal');
+      term.open(terminalElement);
+      fitAddon.fit();
+
+      function notifyResize() {
+        if (window.terminal4eResize) {
+          window.terminal4eResize(term.cols, term.rows);
+        }
+      }
+
+      term.onData(function (data) {
+        if (window.terminal4eSendInput) {
+          window.terminal4eSendInput(data);
+        }
+      });
+
+      term.onResize(function () {
+        notifyResize();
+      });
+
+      window.addEventListener('resize', function () {
+        fitAddon.fit();
+        notifyResize();
+      });
+
+      window.terminal4eWrite = function (data) {
+        term.write(data);
+      };
+
+      window.terminal4eFocus = function () {
+        term.focus();
+      };
+
+      function getI18nMessage(key) {
+        const args = Array.prototype.slice.call(arguments, 1);
+        if (window.terminal4eGetMessage) {
+          const result = window.terminal4eGetMessage.apply(null, [key].concat(args));
+          if (result && result !== key) {
+            return result;
+          }
+        }
+        if (key === 'TerminalView_ConfirmPasteTitle') {
+          return '确认粘贴';
+        }
+        if (key === 'TerminalView_ConfirmPasteMessage') {
+          return '粘贴板中检测到以下多行内容，您确认要粘贴吗？';
+        }
+        if (key === 'TerminalView_OmittedSuffix') {
+          return '...(' + (args[0] || 0) + ' characters omitted)';
+        }
+        return key;
+      }
+
+      window.terminal4eI18n = getI18nMessage;
+
+      function getPreference(key, defaultValue) {
+        if (window.terminal4eGetPreference) {
+          const value = window.terminal4eGetPreference(key);
+          if (typeof value === 'boolean') {
+            return value;
+          }
+          if (value === 'true' || value === 'false') {
+            return value === 'true';
+          }
+        }
+        return defaultValue;
+      }
+
+      function readClipboardText(callback) {
+        if (window.terminal4eReadClipboard) {
+          callback(window.terminal4eReadClipboard() || '');
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then(callback);
+        } else {
+          callback('');
+        }
+      }
+
+      function writeClipboardText(text) {
+        if (window.terminal4eWriteClipboard) {
+          window.terminal4eWriteClipboard(text);
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text);
+        }
+      }
+
+      function copySelection() {
+        const selection = term.getSelection();
+        if (selection) {
+          writeClipboardText(selection);
+          if (typeof term.clearSelection === 'function') {
+            term.clearSelection();
+          }
+          return true;
+        }
+        return false;
+      }
+
+      function resolvePasteText(text) {
+        if (!text) {
+          return null;
+        }
+        const hasNewline = text.indexOf('\n') !== -1 || text.indexOf('\r') !== -1;
+        if (!hasNewline) {
+          return text;
+        }
+        const confirmEnabled = getPreference('terminal.paste.confirmMultiline', true);
+        if (!confirmEnabled) {
+          return text;
+        }
+        const confirmTitle = getI18nMessage('TerminalView_ConfirmPasteTitle');
+        const confirmMessage = getI18nMessage('TerminalView_ConfirmPasteMessage', '');
+        if (window.terminal4eConfirmMultilinePaste) {
+          const result = window.terminal4eConfirmMultilinePaste(confirmTitle, confirmMessage, text);
+          if (result === null || result === undefined || result === '') {
+            return null;
+          }
+          return String(result);
+        }
+        const maxPreviewLength = 1000;
+        let preview = text;
+        if (text.length > maxPreviewLength) {
+          const omitted = text.length - maxPreviewLength;
+          const suffix = getI18nMessage('TerminalView_OmittedSuffix', omitted);
+          preview = text.slice(0, maxPreviewLength) + suffix;
+        }
+        const fallbackMessage = getI18nMessage('TerminalView_ConfirmPasteMessage', preview);
+        const confirmed = window.terminal4eConfirm
+          ? window.terminal4eConfirm(confirmTitle, fallbackMessage)
+          : window.confirm(fallbackMessage);
+        return confirmed ? text : null;
+      }
+
+      function pasteFromClipboard() {
+        readClipboardText(function (text) {
+          const resolved = resolvePasteText(text);
+          if (!resolved) {
+            return;
+          }
+          sendInput(resolved);
+        });
+        return true;
+      }
+
+      term.attachCustomKeyEventHandler(function (event) {
+        const isCtrlOrMeta = event.ctrlKey || event.metaKey;
+        if (!isCtrlOrMeta) {
+          return true;
+        }
+        const key = event.key && event.key.toLowerCase();
+        if (key === 'c' && term.getSelection()) {
+          return !copySelection();
+        }
+        if (key === 'v') {
+          return !pasteFromClipboard();
+        }
+        return true;
+      });
+
+      term.onTitleChange(function (title) {
+        if (window.terminal4eSetTitle) {
+          window.terminal4eSetTitle(title);
+        }
+      });
+
+      function sendInput(text) {
+        if (!text) {
+          return;
+        }
+        if (window.terminal4eSendInput) {
+          window.terminal4eSendInput(text);
+        } else if (typeof term.paste === 'function') {
+          term.paste(text);
+        } else {
+          term.write(text);
+        }
+      }
+
+      terminalElement.addEventListener('contextmenu', function (event) {
+        event.preventDefault();
+        const selection = term.getSelection();
+        if (selection) {
+          copySelection();
+          return;
+        }
+        pasteFromClipboard();
+      });
+
+      terminalElement.addEventListener('paste', function (event) {
+        event.preventDefault();
+      });
+
+      document.addEventListener('paste', function (event) {
+        if (terminalElement.contains(event.target)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }, true);
+
+      notifyResize();
+      term.focus();
+      if (window.terminal4eReady) {
+        window.terminal4eReady();
+      }
+    })();
+  </script>
+</body>
+</html>

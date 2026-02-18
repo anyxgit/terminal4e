@@ -1,0 +1,62 @@
+# OS / system
+Thumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Logs
+*.log
+logs/
+log/
+
+# Build / compiled output
+bin/
+build/
+out/
+target/
+dist/
+
+# Temp / cache
+tmp/
+temp/
+.tmp/
+.cache/
+*.tmp
+*.bak
+*.old
+*.orig
+*.class
+
+# Package manager caches (if any)
+.gradle/
+!.mvn/wrapper/maven-wrapper.jar
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+npm-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# AI coding tools (generated)
+.copilot/
+.cursor/
+.continue/
+.windsurf/
+.codeium/
+.tabnine/
+.aider/
+.github/
+web/package-lock.json
