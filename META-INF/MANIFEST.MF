@@ -7,9 +7,9 @@ Bundle-Version: 1.0.0.qualifier
 Bundle-Activator: me.anyx.terminal4e.Activator
 Bundle-ClassPath: .,
  lib/image4j-0.7.2.jar,
- lib/pty4j-0.13.4.jar,
+ lib/pty4j-0.13.12.jar,
  lib/annotations-24.0.1.jar,
- lib/kotlin-stdlib-1.9.22.jar,
+ lib/kotlin-stdlib-2.1.21.jar,
  lib/jna-5.18.1.jar,
  lib/jna-platform-5.18.1.jar,
  lib/slf4j-api-2.0.17.jar,
