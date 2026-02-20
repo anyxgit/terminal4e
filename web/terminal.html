@@ -17,6 +17,14 @@
       height: 100%;
     }
   </style>
+  <script type="text/javascript">
+    if (!window.terminal4eReady) {
+        if (console && console.warn) {
+            console.warn("Failed inject terminal4e functions, reload page...")
+        }
+        location.reload();
+    }
+  </script>
 </head>
 <body>
   <div id="terminal"></div>
@@ -26,7 +34,7 @@
   <script src="node_modules/@xterm/addon-progress/lib/addon-progress.js"></script>
   <script src="node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
   <script src="node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
-  <script>
+  <script type="text/javascript">
     (function () {
       const term = new Terminal({
         cursorBlink: true,

@@ -306,6 +306,8 @@ public class TerminalView extends ViewPart {
 		    if (!e.top) {
 		        return;
 		    }
+		    
+		    Activator.getLogger().info("Browser location changing");
 		
     		tab.readyFunction = new BrowserFunction(tab.browser, "terminal4eReady") {
     			@Override
@@ -530,9 +532,9 @@ public class TerminalView extends ViewPart {
 			}
 			updateSessionSnapshot();
 		} catch (IOException ex) {
-			appendOutput(tab,
-					NLS.bind(Messages.TerminalView_FailedToStartShell, ex.getMessage())
-							+ System.lineSeparator());
+		    String errorMsg = NLS.bind(Messages.TerminalView_FailedToStartShell, shell.getLabel(), ex.getMessage());
+		    Activator.getLogger().error(errorMsg, ex);
+			appendOutput(tab, errorMsg + System.lineSeparator());
 		}
 	}
 
