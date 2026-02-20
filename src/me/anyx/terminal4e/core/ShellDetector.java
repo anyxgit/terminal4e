@@ -19,23 +19,62 @@ public final class ShellDetector {
 	public static List<ShellDescriptor> detect() {
 		List<ShellDescriptor> shells = new ArrayList<>();
 
-		String comSpec = System.getenv("ComSpec");
-		if (comSpec != null && !comSpec.isEmpty()) {
-			shells.add(new ShellDescriptor("cmd", Messages.Shell_CommandPrompt, comSpec, null));
-		} else {
-			shells.add(new ShellDescriptor("cmd", Messages.Shell_CommandPrompt, "cmd.exe", null));
-		}
-
-		shells.add(new ShellDescriptor("powershell", Messages.Shell_WindowsPowerShell, "powershell.exe",
-				Arrays.asList("-NoLogo")));
-		shells.add(new ShellDescriptor("pwsh", Messages.Shell_PowerShell7, "pwsh.exe",
-				Arrays.asList("-NoLogo")));
-
+		addCmd(shells);
+		addPowershell(shells);
+		addPwsh(shells);
 		addWsl(shells);
 		addGitBash(shells);
 
 		return shells;
 	}
+
+    private static void addPwsh(List<ShellDescriptor> shells) {
+        Path pwshPath = findExecutable("pwsh.exe");
+		if (pwshPath == null) {
+			List<Path> pwshCandidates = new ArrayList<>();
+			String programFiles = getenv("ProgramFiles");
+			String programFilesX86 = getenv("ProgramFiles(x86)");
+			String programW6432 = getenv("ProgramW6432");
+			addCandidate(pwshCandidates, programFiles, "PowerShell", "7", "pwsh.exe");
+			addCandidate(pwshCandidates, programFiles, "PowerShell", "7-preview", "pwsh.exe");
+			addCandidate(pwshCandidates, programFilesX86, "PowerShell", "7", "pwsh.exe");
+			addCandidate(pwshCandidates, programFilesX86, "PowerShell", "7-preview", "pwsh.exe");
+			addCandidate(pwshCandidates, programW6432, "PowerShell", "7", "pwsh.exe");
+			addCandidate(pwshCandidates, programW6432, "PowerShell", "7-preview", "pwsh.exe");
+			pwshPath = findFirstExisting(pwshCandidates);
+		}
+		if (pwshPath != null) {
+			shells.add(new ShellDescriptor("pwsh", Messages.Shell_PowerShell7, pwshPath.toString(),
+					Arrays.asList("-NoLogo")));
+		}
+    }
+
+    private static void addPowershell(List<ShellDescriptor> shells) {
+        Path powershellPath = findExecutable("powershell.exe");
+		if (powershellPath == null) {
+			List<Path> powershellCandidates = new ArrayList<>();
+			String systemRoot = getenv("SystemRoot");
+			addCandidate(powershellCandidates, systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+			addCandidate(powershellCandidates, systemRoot, "Sysnative", "WindowsPowerShell", "v1.0", "powershell.exe");
+			addCandidate(powershellCandidates, systemRoot, "SysWOW64", "WindowsPowerShell", "v1.0", "powershell.exe");
+			addCandidate(powershellCandidates, "C:\\Windows", "System32", "WindowsPowerShell", "v1.0",
+					"powershell.exe");
+			powershellPath = findFirstExisting(powershellCandidates);
+		}
+		if (powershellPath != null) {
+			shells.add(new ShellDescriptor("powershell", Messages.Shell_WindowsPowerShell, powershellPath.toString(),
+					Arrays.asList("-NoLogo")));
+		}
+    }
+
+    private static void addCmd(List<ShellDescriptor> shells) {
+        String comSpec = System.getenv("ComSpec");
+		if (comSpec != null && !comSpec.isEmpty()) {
+			shells.add(new ShellDescriptor("cmd", Messages.Shell_CommandPrompt, comSpec, null));
+		} else {
+			shells.add(new ShellDescriptor("cmd", Messages.Shell_CommandPrompt, "cmd.exe", null));
+		}
+    }
 
 	private static void addGitBash(List<ShellDescriptor> shells) {
 		Path gitFromWhere = findGitFromWhere();
@@ -101,11 +140,15 @@ public final class ShellDetector {
 	}
 
 	private static Path findGitFromWhere() {
+		return findExecutable("git");
+	}
+
+	private static Path findExecutable(String executableName) {
 		String osName = System.getProperty("os.name");
 		if (osName == null || !osName.toLowerCase().contains("windows")) {
 			return null;
 		}
-		ProcessBuilder builder = new ProcessBuilder("where", "git");
+		ProcessBuilder builder = new ProcessBuilder("where", executableName);
 		builder.redirectErrorStream(true);
 		try {
 			Process process = builder.start();
@@ -120,7 +163,7 @@ public final class ShellDetector {
 					Path path = Paths.get(trimmed);
 					String lower = trimmed.toLowerCase();
 					if (Files.exists(path)
-								&& (lower.endsWith("git.exe") || lower.endsWith("git.cmd") || lower.endsWith("git.bat"))) {
+							&& (lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat"))) {
 						return path;
 					}
 					if (Files.exists(path)) {
@@ -131,6 +174,15 @@ public final class ShellDetector {
 			process.destroy();
 		} catch (Exception ex) {
 			// ignore
+		}
+		return null;
+	}
+
+	private static Path findFirstExisting(List<Path> candidates) {
+		for (Path path : candidates) {
+			if (path != null && Files.exists(path)) {
+				return path;
+			}
 		}
 		return null;
 	}
