@@ -307,7 +307,7 @@ public class TerminalView extends ViewPart {
 		        return;
 		    }
 		    
-		    Activator.getLogger().info("Browser location changing");
+		    Activator.getLogger().info("Tab(" + tab.shell.getLabel() + ") browser location changing");
 		
     		tab.readyFunction = new BrowserFunction(tab.browser, "terminal4eReady") {
     			@Override
