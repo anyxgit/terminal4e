@@ -19,17 +19,91 @@ public final class ShellDetector {
 	public static List<ShellDescriptor> detect() {
 		List<ShellDescriptor> shells = new ArrayList<>();
 
-		addCmd(shells);
-		addPowershell(shells);
-		addPwsh(shells);
-		addWsl(shells);
-		addGitBash(shells);
+		if (isWindows()) {
+			addCmd(shells);
+			addPowershell(shells);
+			addPwsh(shells);
+			addWsl(shells);
+			addGitBash(shells);
+		} else {
+			addUnixShells(shells);
+		}
 
 		return shells;
 	}
 
-    private static void addPwsh(List<ShellDescriptor> shells) {
-        Path pwshPath = findExecutable("pwsh.exe");
+	private static void addUnixShells(List<ShellDescriptor> shells) {
+		Set<String> addedCommands = new HashSet<>();
+		addUnixShellFromEnv(shells, addedCommands);
+		addUnixShell(shells, addedCommands, "zsh", Messages.Shell_Zsh);
+		addUnixShell(shells, addedCommands, "bash", Messages.Shell_Bash);
+		addUnixShell(shells, addedCommands, "fish", Messages.Shell_Fish);
+		addUnixShell(shells, addedCommands, "sh", Messages.Shell_Sh);
+	}
+
+	private static void addUnixShellFromEnv(List<ShellDescriptor> shells, Set<String> addedCommands) {
+		String shellEnv = getenv("SHELL");
+		if (shellEnv.isEmpty()) {
+			return;
+		}
+		Path shellPath = Paths.get(shellEnv);
+		if (!Files.exists(shellPath)) {
+			return;
+		}
+		String command = shellPath.toAbsolutePath().normalize().toString();
+		if (!addedCommands.add(command)) {
+			return;
+		}
+		String executable = shellPath.getFileName() == null ? "shell" : shellPath.getFileName().toString();
+		String lower = executable.toLowerCase();
+		String id = lower.replaceAll("[^a-z0-9]+", "-");
+		if (id.isEmpty() || "-".equals(id)) {
+			id = "shell";
+		}
+		String label;
+		if ("zsh".equals(lower)) {
+			label = Messages.Shell_Zsh;
+		} else if ("bash".equals(lower)) {
+			label = Messages.Shell_Bash;
+		} else if ("fish".equals(lower)) {
+			label = Messages.Shell_Fish;
+		} else if ("sh".equals(lower)) {
+			label = Messages.Shell_Sh;
+		} else {
+			label = executable;
+		}
+		shells.add(new ShellDescriptor(id, label, command, null));
+	}
+
+	private static void addUnixShell(List<ShellDescriptor> shells, Set<String> addedCommands, String executableName,
+			String label) {
+		Path path = findExecutable(executableName);
+		if (path == null) {
+			path = findUnixShellByCommonPaths(executableName);
+		}
+		if (path == null) {
+			return;
+		}
+		String command = path.toAbsolutePath().normalize().toString();
+		if (!addedCommands.add(command)) {
+			return;
+		}
+		shells.add(new ShellDescriptor(executableName, label, command, null));
+	}
+
+	private static Path findUnixShellByCommonPaths(String executableName) {
+		List<Path> candidates = Arrays.asList(Paths.get("/bin", executableName), Paths.get("/usr/bin", executableName),
+				Paths.get("/usr/local/bin", executableName), Paths.get("/opt/homebrew/bin", executableName));
+		for (Path candidate : candidates) {
+			if (Files.exists(candidate)) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	private static void addPwsh(List<ShellDescriptor> shells) {
+		Path pwshPath = findExecutable("pwsh.exe");
 		if (pwshPath == null) {
 			List<Path> pwshCandidates = new ArrayList<>();
 			String programFiles = getenv("ProgramFiles");
@@ -47,10 +121,10 @@ public final class ShellDetector {
 			shells.add(new ShellDescriptor("pwsh", Messages.Shell_PowerShell7, pwshPath.toString(),
 					Arrays.asList("-NoLogo")));
 		}
-    }
+	}
 
-    private static void addPowershell(List<ShellDescriptor> shells) {
-        Path powershellPath = findExecutable("powershell.exe");
+	private static void addPowershell(List<ShellDescriptor> shells) {
+		Path powershellPath = findExecutable("powershell.exe");
 		if (powershellPath == null) {
 			List<Path> powershellCandidates = new ArrayList<>();
 			String systemRoot = getenv("SystemRoot");
@@ -65,16 +139,16 @@ public final class ShellDetector {
 			shells.add(new ShellDescriptor("powershell", Messages.Shell_WindowsPowerShell, powershellPath.toString(),
 					Arrays.asList("-NoLogo")));
 		}
-    }
+	}
 
-    private static void addCmd(List<ShellDescriptor> shells) {
-        String comSpec = System.getenv("ComSpec");
+	private static void addCmd(List<ShellDescriptor> shells) {
+		String comSpec = System.getenv("ComSpec");
 		if (comSpec != null && !comSpec.isEmpty()) {
 			shells.add(new ShellDescriptor("cmd", Messages.Shell_CommandPrompt, comSpec, null));
 		} else {
 			shells.add(new ShellDescriptor("cmd", Messages.Shell_CommandPrompt, "cmd.exe", null));
 		}
-    }
+	}
 
 	private static void addGitBash(List<ShellDescriptor> shells) {
 		Path gitFromWhere = findGitFromWhere();
@@ -144,11 +218,7 @@ public final class ShellDetector {
 	}
 
 	private static Path findExecutable(String executableName) {
-		String osName = System.getProperty("os.name");
-		if (osName == null || !osName.toLowerCase().contains("windows")) {
-			return null;
-		}
-		ProcessBuilder builder = new ProcessBuilder("where", executableName);
+		ProcessBuilder builder = new ProcessBuilder(isWindows() ? "where" : "which", executableName);
 		builder.redirectErrorStream(true);
 		try {
 			Process process = builder.start();
@@ -162,11 +232,13 @@ public final class ShellDetector {
 					}
 					Path path = Paths.get(trimmed);
 					String lower = trimmed.toLowerCase();
-					if (Files.exists(path)
-							&& (lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat"))) {
+					if (!Files.exists(path)) {
+						continue;
+					}
+					if (!isWindows()) {
 						return path;
 					}
-					if (Files.exists(path)) {
+					if (lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat")) {
 						return path;
 					}
 				}
@@ -270,5 +342,10 @@ public final class ShellDetector {
 	private static String getenv(String name) {
 		String value = System.getenv(name);
 		return value == null ? "" : value;
+	}
+
+	private static boolean isWindows() {
+		String osName = System.getProperty("os.name");
+		return osName != null && osName.toLowerCase().contains("windows");
 	}
 }

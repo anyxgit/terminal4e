@@ -74,6 +74,10 @@ public final class Messages extends NLS {
 	public static String Shell_PowerShell7;
 	public static String Shell_GitBash;
 	public static String Shell_Wsl;
+	public static String Shell_Bash;
+	public static String Shell_Zsh;
+	public static String Shell_Fish;
+	public static String Shell_Sh;
 
 	private Messages() {
 	}
