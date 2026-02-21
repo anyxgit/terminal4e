@@ -71,7 +71,7 @@ import me.anyx.terminal4e.core.ShellDetector;
 import me.anyx.terminal4e.core.TerminalSession;
 
 public class TerminalView extends ViewPart {
-	public static final String ID = "me.anyx.terminal4e.view";
+	public static final String ID = TerminalView.class.getName();
 	private static final char SNAPSHOT_SEP = '|';
 	private static final char SNAPSHOT_ESC = '\\';
 	private static final char ENV_PAIR_SEP = ';';

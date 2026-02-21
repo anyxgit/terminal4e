@@ -1,71 +1,174 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?eclipse version="3.4"?>
 <plugin>
-   <extension
-         point="org.eclipse.ui.views">
-      <view
-            id="me.anyx.terminal4e.view"
+    <extension
+        point="org.eclipse.ui.views">
+        
+        <category
+            id="me.anyx.terminal4e.ui.views.category"
+            name="%view.category.name">
+        </category>
+      
+        <view
+            id="me.anyx.terminal4e.ui.TerminalView"
             name="%view.name"
-            category="org.eclipse.ui.category.system"
+            icon="icons/terminal-16.png"
+            category="me.anyx.terminal4e.ui.views.category"
             class="me.anyx.terminal4e.ui.TerminalView">
-      </view>
-   </extension>
-      <extension
-         point="org.eclipse.ui.preferencePages">
-      <page
-         id="me.anyx.terminal4e.preferences"
-         name="%preference.page.name"
-         class="me.anyx.terminal4e.ui.TerminalPreferencePage">
-      </page>
-      </extension>
-         <extension
-            point="org.eclipse.ui.startup">
-            <startup
-               class="me.anyx.terminal4e.ui.ProjectTerminalAutoOpenStartup">
-            </startup>
-         </extension>
-      <extension
-            point="org.eclipse.ui.commands">
+        </view>
+    </extension>
+    
+    <!-- Preferences contributions -->
+    <extension
+        point="org.eclipse.ui.preferencePages">
+        <page
+            id="me.anyx.terminal4e.preferences"
+            name="%preference.page.name"
+            class="me.anyx.terminal4e.ui.TerminalPreferencePage">
+        </page>
+    </extension>
+    <extension
+        point="org.eclipse.ui.startup">
+        <startup
+            class="me.anyx.terminal4e.ui.ProjectTerminalAutoOpenStartup">
+        </startup>
+    </extension>
+    <!-- Commands contributions -->
+    <extension
+        point="org.eclipse.ui.commands">
+        <command
+            id="me.anyx.terminal4e.command.openInTerminal"
+            name="%command.openInTerminal.name">
+        </command>
          <command
-               id="me.anyx.terminal4e.openInTerminal"
-               name="%command.openInTerminal.name">
-         </command>
-      </extension>
-      <extension
-            point="org.eclipse.ui.handlers">
-         <handler
-               class="me.anyx.terminal4e.ui.OpenInTerminalHandler"
-               commandId="me.anyx.terminal4e.openInTerminal">
-         </handler>
-      </extension>
-      <extension
-            point="org.eclipse.ui.menus">
-         <menuContribution
-               locationURI="popup:org.eclipse.ui.navigator.ProjectExplorer#PopupMenu?after=additions">
+            id="me.anyx.terminal4e.ui.command.launchToolbar"
+            name="%command.launchToolbar.name">
+        </command>
+    </extension>
+    <!-- Handlers contributions -->
+    <extension
+        point="org.eclipse.ui.handlers">
+        <handler
+            class="me.anyx.terminal4e.ui.OpenInTerminalHandler"
+            commandId="me.anyx.terminal4e.command.openInTerminal">
+        </handler>
+        <handler
+            class="me.anyx.terminal4e.ui.OpenInTerminalHandler"
+            commandId="me.anyx.terminal4e.ui.command.launchToolbar">
+        </handler>
+    </extension>
+    
+    <!-- Menus contributions -->
+    <extension
+        point="org.eclipse.ui.menus">
+        <menuContribution locationURI="toolbar:org.eclipse.ui.main.toolbar?after=additions">
+           <toolbar
+               id="me.anyx.terminal4e.ui.toolbar"
+               label="%toolbar.terminal.label">
+             <command
+                   commandId="me.anyx.terminal4e.ui.command.launchToolbar"
+                   icon="icons/terminal-16.png"
+                   id="me.anyx.terminal4e.ui.commands.launchToolbar"
+                   label="%command.launchToolbar.label"
+                   style="push"
+                   tooltip="%command.launchToolbar.tooltip">
+             </command>
+           </toolbar>
+        </menuContribution>
+        <menuContribution
+            locationURI="popup:org.eclipse.ui.navigator.ProjectExplorer#PopupMenu?after=additions">
             <command
-                  commandId="me.anyx.terminal4e.openInTerminal"
-               icon="icons/terminal-16.png"
-                  label="%command.openInTerminal.label"
-                  style="push">
+                commandId="me.anyx.terminal4e.command.openInTerminal"
+                icon="icons/terminal-16.png"
+                label="%command.openInTerminal.label"
+                style="push">
             </command>
-         </menuContribution>
-         <menuContribution
-               locationURI="popup:org.eclipse.jdt.ui.PackageExplorer#PopupMenu?after=additions">
+        </menuContribution>
+        <menuContribution
+            locationURI="popup:org.eclipse.jdt.ui.PackageExplorer?after=additions">
             <command
-                  commandId="me.anyx.terminal4e.openInTerminal"
-               icon="icons/terminal-16.png"
-                  label="%command.openInTerminal.label"
-                  style="push">
+                commandId="me.anyx.terminal4e.command.openInTerminal"
+                icon="icons/terminal-16.png"
+                label="%command.openInTerminal.label"
+                style="push">
             </command>
-         </menuContribution>
-         <menuContribution
-               locationURI="popup:org.eclipse.ui.views.ResourceNavigator#PopupMenu?after=additions">
+        </menuContribution>
+        <menuContribution
+            locationURI="popup:bndtools.PackageExplorer?after=additions">
             <command
-                  commandId="me.anyx.terminal4e.openInTerminal"
-               icon="icons/terminal-16.png"
-                  label="%command.openInTerminal.label"
-                  style="push">
+                commandId="me.anyx.terminal4e.command.openInTerminal"
+                icon="icons/terminal-16.png"
+                label="%command.openInTerminal.label"
+                style="push">
             </command>
-         </menuContribution>
-      </extension>
+        </menuContribution>
+    </extension>
+    <extension point="org.eclipse.ui.bindings">
+      <key
+            commandId="me.anyx.terminal4e.command.openInTerminal"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="CTRL+SHIFT+M3+T"/> <!-- Don't use M1 since COMMAND+Option T already taken on Mac -->
+   </extension>
+   
+    <!-- Perspective extension contributions -->    
+   <extension point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension targetID="org.eclipse.ui.resourcePerspective">
+         <!-- Register the view shortcuts  -->
+         <viewShortcut id="me.anyx.terminal4e.ui.TerminalView"/>
+         <!-- Place the Terminal view relative to the Task List view -->
+         <view
+               id="me.anyx.terminal4e.ui.TerminalView"
+               minimized="false"
+               relationship="stack"
+               relative="org.eclipse.ui.views.TaskList"
+               visible="false">
+         </view>
+      </perspectiveExtension>
+
+      <perspectiveExtension targetID="org.eclipse.debug.ui.DebugPerspective">
+         <!-- Register the view shortcuts  -->
+         <viewShortcut id="me.anyx.terminal4e.ui.TerminalView"/>
+         <!-- Place the Terminal view relative to the Task List view -->
+         <view
+               id="me.anyx.terminal4e.ui.TerminalView"
+               minimized="false"
+               relationship="stack"
+               relative="org.eclipse.ui.console.ConsoleView"
+               visible="false">
+         </view>
+      </perspectiveExtension>
+
+      <perspectiveExtension targetID="org.eclipse.jdt.ui.JavaPerspective">
+         <!-- Register the view shortcuts  -->
+         <viewShortcut id="me.anyx.terminal4e.ui.TerminalView"/>
+         <!-- Place the Terminal view relative to the Task List view -->
+         <view
+               id="me.anyx.terminal4e.ui.TerminalView"
+               minimized="false"
+               relationship="stack"
+               relative="org.eclipse.ui.views.ProblemView"
+               visible="false">
+         </view>
+      </perspectiveExtension>
+
+      <perspectiveExtension targetID="org.eclipse.pde.ui.PDEPerspective">
+         <!-- Register the view shortcuts  -->
+         <viewShortcut id="me.anyx.terminal4e.ui.TerminalView"/>
+         <!-- Place the Terminal view relative to the Task List view -->
+         <view
+               id="me.anyx.terminal4e.ui.TerminalView"
+               minimized="false"
+               relationship="stack"
+               relative="org.eclipse.ui.views.ProblemView"
+               visible="false">
+         </view>
+      </perspectiveExtension>
+      
+      <perspectiveExtension targetID="*">
+         <!-- Show In shortcut -->
+         <showInPart id="me.anyx.terminal4e.ui.TerminalView"/>
+      </perspectiveExtension>
+   </extension>
+   
 </plugin>
