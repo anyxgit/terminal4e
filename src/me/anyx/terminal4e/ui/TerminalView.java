@@ -1262,21 +1262,20 @@ public class TerminalView extends ViewPart {
 		boolean escaped = false;
 		for (int i = 0; i < raw.length(); i++) {
 			char c = raw.charAt(i);
-			if (escaped) {
-				current.append(c);
-				escaped = false;
-				continue;
-			}
-			if (c == SNAPSHOT_ESC) {
-				escaped = true;
-				continue;
-			}
 			if (c == ENV_PAIR_SEP) {
-				pairs.add(current.toString());
-				current.setLength(0);
-				continue;
+				if (!escaped) {
+					pairs.add(current.toString());
+					current.setLength(0);
+					escaped = false;
+					continue;
+				}
 			}
 			current.append(c);
+			if (c == SNAPSHOT_ESC && !escaped) {
+				escaped = true;
+			} else {
+				escaped = false;
+			}
 		}
 		pairs.add(current.toString());
 		return pairs;
@@ -1286,16 +1285,13 @@ public class TerminalView extends ViewPart {
 		boolean escaped = false;
 		for (int i = 0; i < value.length(); i++) {
 			char c = value.charAt(i);
-			if (escaped) {
-				escaped = false;
-				continue;
-			}
-			if (c == SNAPSHOT_ESC) {
-				escaped = true;
-				continue;
-			}
-			if (c == target) {
+			if (c == target && !escaped) {
 				return i;
+			}
+			if (c == SNAPSHOT_ESC && !escaped) {
+				escaped = true;
+			} else {
+				escaped = false;
 			}
 		}
 		return -1;
@@ -1325,7 +1321,12 @@ public class TerminalView extends ViewPart {
 		for (int i = 0; i < value.length(); i++) {
 			char c = value.charAt(i);
 			if (escaped) {
-				sb.append(c);
+				if (c == SNAPSHOT_ESC || c == ENV_PAIR_SEP || c == ENV_KV_SEP || c == '\n') {
+					sb.append(c);
+				} else {
+					sb.append(SNAPSHOT_ESC);
+					sb.append(c);
+				}
 				escaped = false;
 				continue;
 			}
@@ -1334,6 +1335,9 @@ public class TerminalView extends ViewPart {
 				continue;
 			}
 			sb.append(c);
+		}
+		if (escaped) {
+			sb.append(SNAPSHOT_ESC);
 		}
 		return sb.toString();
 	}
