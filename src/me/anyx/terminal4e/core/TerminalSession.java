@@ -87,6 +87,11 @@ public class TerminalSession {
 
 	public void start(ShellDescriptor shell, Charset charset, Path workingDirectory, Map<String, String> environment,
 			Consumer<String> output, Consumer<Integer> exitHandler) throws IOException {
+		start(shell, charset, workingDirectory, environment, output, exitHandler, true);
+	}
+
+	public void start(ShellDescriptor shell, Charset charset, Path workingDirectory, Map<String, String> environment,
+			Consumer<String> output, Consumer<Integer> exitHandler, boolean monitorChildProcesses) throws IOException {
 		if (running.get()) {
 			throw new IllegalStateException("Session already running");
 		}
@@ -111,7 +116,9 @@ public class TerminalSession {
 		hasChildProcesses = false;
 		activeProcessNames = Collections.emptyList();
 		notifyProcessActivity();
-		startChildProcessMonitor();
+		if (monitorChildProcesses) {
+			startChildProcessMonitor();
+		}
 		applyWindowSize();
 
 		stdoutThread = createReaderThread(process.getInputStream(), output, "terminal-pty");

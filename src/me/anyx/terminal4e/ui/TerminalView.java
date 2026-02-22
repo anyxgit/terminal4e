@@ -528,6 +528,8 @@ public class TerminalView extends ViewPart {
 	private void startSession(TerminalTab tab, ShellDescriptor shell, Charset charset, Path workingDirectory,
 			Map<String, String> environment) {
 		try {
+			boolean monitorChildProcesses = getPreferenceStore()
+					.getBoolean(Activator.PREF_CONFIRM_CLOSE_WITH_PROCESS);
 			appendOutput(tab, NLS.bind(Messages.TerminalView_StartingShell, shell.getLabel())
 					+ System.lineSeparator());
 			if (tab != null && tab.item != null && !tab.item.isDisposed()) {
@@ -539,7 +541,7 @@ public class TerminalView extends ViewPart {
 			tab.workingDirectory = workingDirectory;
 			tab.environment = environment;
 			tab.session.start(shell, charset, workingDirectory, environment, text -> appendOutput(tab, text),
-					exitCode -> handleSessionExit(tab, exitCode));
+					exitCode -> handleSessionExit(tab, exitCode), monitorChildProcesses);
 			bindProcessActivity(tab);
 			if (tab.environment == null) {
 				tab.environment = tab.session.getEnvironment();
