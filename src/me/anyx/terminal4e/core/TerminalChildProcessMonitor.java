@@ -39,9 +39,10 @@ final class TerminalChildProcessMonitor {
     private volatile long lastInactiveRefreshAt;
     private volatile ScheduledFuture<?> pendingActiveRefresh;
 
-    TerminalChildProcessMonitor(long rootPid, ShellDescriptor shell, Consumer<DetectionState> onStateChanged) {
+    TerminalChildProcessMonitor(long rootPid, ShellDescriptor shell, String sessionMarker,
+            Consumer<DetectionState> onStateChanged) {
         this.rootPid = rootPid;
-        this.wslContext = WslContext.from(shell);
+        this.wslContext = WslContext.from(shell, sessionMarker);
         this.sessionIgnoredNames = buildSessionIgnoredNames(shell, this.wslContext);
         this.onStateChanged = onStateChanged;
         ThreadFactory factory = runnable -> {
@@ -253,7 +254,7 @@ final class TerminalChildProcessMonitor {
         }
 
         private static void collectMeaningfulWslProcesses(WslContext wslContext, List<ProcessEntry> matches,
-                Set<String> sessionIgnoredNames) {
+            Set<String> sessionIgnoredNames) {
             if (wslContext == null || !wslContext.isEnabled()) {
                 return;
             }
@@ -261,13 +262,67 @@ final class TerminalChildProcessMonitor {
                     wslContext.command,
                     "-d",
                     wslContext.distribution,
-                    "--",
+                    "-e",
                     "sh",
                     "-lc",
                     "ps -eo pid=,ppid=,tty=,comm=,args="), 6);
             if (lines.isEmpty()) {
                 return;
             }
+            List<ProcessEntry> entries = parseWslProcessEntries(lines);
+            if (entries.isEmpty()) {
+                return;
+            }
+
+            Long sessionRootPid = resolveWslSessionRootPid(wslContext, entries);
+            if (sessionRootPid == null || sessionRootPid.longValue() <= 0) {
+                return;
+            }
+
+            Map<Long, List<ProcessEntry>> byParent = new HashMap<>();
+            for (ProcessEntry entry : entries) {
+                byParent.computeIfAbsent(Long.valueOf(entry.parentPid), key -> new ArrayList<>()).add(entry);
+            }
+
+            ArrayDeque<ProcessEntry> queue = new ArrayDeque<>();
+            List<ProcessEntry> directChildren = byParent.get(sessionRootPid);
+            if (directChildren != null) {
+                queue.addAll(directChildren);
+            }
+
+            Set<Long> visited = new HashSet<>();
+            while (!queue.isEmpty()) {
+                ProcessEntry current = queue.removeFirst();
+                if (!visited.add(Long.valueOf(current.pid))) {
+                    continue;
+                }
+                if (!current.tty.startsWith("pts/")) {
+                    List<ProcessEntry> children = byParent.get(Long.valueOf(current.pid));
+                    if (children != null) {
+                        queue.addAll(children);
+                    }
+//                    continue;
+                }
+                if (current.name.isEmpty()) {
+                    continue;
+                }
+                if (sessionIgnoredNames != null && sessionIgnoredNames.contains(current.name)) {
+                    // ignore shell bridge itself
+                } else if (!"ps".equals(current.name)
+                        && !"sh".equals(current.name)
+                        && !WSL_SHELL_NAMES.contains(current.name)) {
+                    current.source = "wsl-subtree";
+                    matches.add(current);
+                }
+                List<ProcessEntry> children = byParent.get(Long.valueOf(current.pid));
+                if (children != null) {
+                    queue.addAll(children);
+                }
+            }
+        }
+
+        private static List<ProcessEntry> parseWslProcessEntries(List<String> lines) {
+            List<ProcessEntry> entries = new ArrayList<>();
             for (String line : lines) {
                 String trimmed = line == null ? "" : line.trim();
                 if (trimmed.isEmpty()) {
@@ -285,25 +340,73 @@ final class TerminalChildProcessMonitor {
                 String tty = parts[2] == null ? "" : parts[2].trim().toLowerCase(Locale.ROOT);
                 String command = parts[3] == null ? "" : parts[3].trim().toLowerCase(Locale.ROOT);
                 String args = parts.length >= 5 && parts[4] != null ? parts[4].trim() : command;
-                if (!tty.startsWith("pts/")) {
-                    continue;
-                }
-                if (command.isEmpty()) {
-                    continue;
-                }
-                if (sessionIgnoredNames != null && sessionIgnoredNames.contains(command)) {
-                    continue;
-                }
-                if ("ps".equals(command) || "sh".equals(command)) {
-                    continue;
-                }
-                if (WSL_SHELL_NAMES.contains(command)) {
-                    continue;
-                }
-                ProcessEntry entry = new ProcessEntry(pid.longValue(), ppid.longValue(), command, tty, args);
-                entry.source = "wsl-pts";
-                matches.add(entry);
+                entries.add(new ProcessEntry(pid.longValue(), ppid.longValue(), command, tty, args));
             }
+            return entries;
+        }
+
+        private static Long resolveWslSessionRootPid(WslContext wslContext, List<ProcessEntry> entries) {
+            if (wslContext == null || !wslContext.hasSessionMarker()) {
+                return null;
+            }
+            String escapedMarker = shellSingleQuote(wslContext.sessionMarker);
+            String script = "for p in /proc/[0-9]*; do "
+                    + "[ -r \"$p/environ\" ] || continue; "
+                    + "if tr '\\0' '\\n' < \"$p/environ\" 2>/dev/null | grep -Fxq 'TERMINAL4E_SESSION_ID=" + escapedMarker + "'; then "
+                    + "printf '%s\\n' \"${p##*/}\"; "
+                    + "fi; "
+                    + "done";
+            List<String> lines = runCommand(Arrays.asList(
+                    wslContext.command,
+                    "-d",
+                    wslContext.distribution,
+                    "-e",
+                    "sh",
+                    "-lc",
+                    script), 6);
+            if (lines.isEmpty()) {
+                return null;
+            }
+
+            Set<Long> candidatePids = new HashSet<>();
+            for (String line : lines) {
+                Long pid = parseLong(line);
+                if (pid != null && pid.longValue() > 0) {
+                    candidatePids.add(pid);
+                }
+            }
+            if (candidatePids.isEmpty()) {
+                return null;
+            }
+
+            Map<Long, ProcessEntry> byPid = new HashMap<>();
+            for (ProcessEntry entry : entries) {
+                byPid.put(Long.valueOf(entry.pid), entry);
+            }
+
+            Long best = null;
+            for (Long candidate : candidatePids) {
+                ProcessEntry entry = byPid.get(candidate);
+                if (entry == null) {
+                    continue;
+                }
+                if (candidatePids.contains(Long.valueOf(entry.parentPid))) {
+                    continue;
+                }
+                best = candidate;
+                break;
+            }
+            if (best != null) {
+                return best;
+            }
+            return candidatePids.iterator().next();
+        }
+
+        private static String shellSingleQuote(String text) {
+            if (text == null) {
+                return "";
+            }
+            return text.replace("'", "'\\''");
         }
 
         private static boolean isIgnoredProcess(String name, Set<String> sessionIgnoredNames) {
@@ -496,10 +599,12 @@ final class TerminalChildProcessMonitor {
     private static final class WslContext {
         private final String command;
         private final String distribution;
+        private final String sessionMarker;
 
-        private WslContext(String command, String distribution) {
+        private WslContext(String command, String distribution, String sessionMarker) {
             this.command = command;
             this.distribution = distribution;
+            this.sessionMarker = sessionMarker;
         }
 
         private boolean isEnabled() {
@@ -507,7 +612,11 @@ final class TerminalChildProcessMonitor {
                     && !distribution.trim().isEmpty();
         }
 
-        private static WslContext from(ShellDescriptor shell) {
+        private boolean hasSessionMarker() {
+            return sessionMarker != null && !sessionMarker.trim().isEmpty();
+        }
+
+        private static WslContext from(ShellDescriptor shell, String sessionMarker) {
             if (shell == null) {
                 return disabled();
             }
@@ -524,7 +633,7 @@ final class TerminalChildProcessMonitor {
             if (distribution == null || distribution.trim().isEmpty()) {
                 return disabled();
             }
-            return new WslContext(command, distribution);
+            return new WslContext(command, distribution, sessionMarker);
         }
 
         private static String extractDistribution(List<String> args) {
@@ -547,7 +656,7 @@ final class TerminalChildProcessMonitor {
         }
 
         private static WslContext disabled() {
-            return new WslContext(null, null);
+            return new WslContext(null, null, null);
         }
     }
 

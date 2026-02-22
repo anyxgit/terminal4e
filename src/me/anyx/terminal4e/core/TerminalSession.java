@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -30,6 +31,7 @@ public class TerminalSession {
 	private volatile Path workingDirectory;
 	private volatile ShellDescriptor shell;
 	private volatile Map<String, String> environment = Collections.emptyMap();
+	private volatile String sessionMarker;
 	private volatile long shellPid = -1;
 	private volatile boolean hasChildProcesses;
 	private volatile List<String> activeProcessNames = Collections.emptyList();
@@ -92,11 +94,13 @@ public class TerminalSession {
 		this.charset = charset == null ? Charset.defaultCharset() : charset;
 		this.workingDirectory = workingDirectory;
 		this.exitNotified.set(false);
+		this.sessionMarker = createSessionMarker();
 		PtyProcessBuilder builder = new PtyProcessBuilder(buildCommand(shell).toArray(new String[0]));
 		if (workingDirectory != null && Files.isDirectory(workingDirectory)) {
 			builder.setDirectory(workingDirectory.toAbsolutePath().toString());
 		}
 		Map<String, String> env = environment == null ? buildEnvironment(shell) : new HashMap<>(environment);
+		enhanceWslEnvironment(shell, env);
 		this.environment = Collections.unmodifiableMap(env);
 		builder.setEnvironment(env);
 		builder.setRedirectErrorStream(true);
@@ -121,6 +125,7 @@ public class TerminalSession {
 		stopChildProcessMonitor();
 		hasChildProcesses = false;
 		activeProcessNames = Collections.emptyList();
+		sessionMarker = null;
 		notifyProcessActivity();
 		if (process != null) {
 			process.destroy();
@@ -186,6 +191,7 @@ public class TerminalSession {
 				stopChildProcessMonitor();
 				hasChildProcesses = false;
 				activeProcessNames = Collections.emptyList();
+				sessionMarker = null;
 				shellPid = -1;
 				notifyProcessActivity();
 				if (exitHandler != null && exitNotified.compareAndSet(false, true)) {
@@ -245,7 +251,7 @@ public class TerminalSession {
 		if (shellPid <= 0) {
 			return;
 		}
-		TerminalChildProcessMonitor monitor = new TerminalChildProcessMonitor(shellPid, shell,
+		TerminalChildProcessMonitor monitor = new TerminalChildProcessMonitor(shellPid, shell, sessionMarker,
 				state -> {
 					hasChildProcesses = state.hasChildProcesses();
 					activeProcessNames = state.getProcessNames();
@@ -293,6 +299,47 @@ public class TerminalSession {
 			}
 		}
 		return -1;
+	}
+
+	private String createSessionMarker() {
+		return "t4e-" + UUID.randomUUID().toString();
+	}
+
+	private void enhanceWslEnvironment(ShellDescriptor shell, Map<String, String> env) {
+		if (!isWsl(shell == null ? null : shell.getId(), shell == null ? null : shell.getCommand())) {
+			return;
+		}
+		if (env == null || sessionMarker == null || sessionMarker.trim().isEmpty()) {
+			return;
+		}
+		env.put("TERMINAL4E_SESSION_ID", sessionMarker);
+		String wslEnv = env.get("WSLENV");
+		String markerKey = "TERMINAL4E_SESSION_ID/u";
+		if (wslEnv == null || wslEnv.trim().isEmpty()) {
+			env.put("WSLENV", markerKey);
+			return;
+		}
+		for (String item : wslEnv.split(":")) {
+			if (item == null) {
+				continue;
+			}
+			String trimmed = item.trim();
+			if (trimmed.equalsIgnoreCase(markerKey) || trimmed.equalsIgnoreCase("TERMINAL4E_SESSION_ID")) {
+				return;
+			}
+		}
+		env.put("WSLENV", wslEnv + ":" + markerKey);
+	}
+
+	private boolean isWsl(String shellId, String command) {
+		if (shellId != null && shellId.toLowerCase().startsWith("wsl")) {
+			return true;
+		}
+		if (command == null) {
+			return false;
+		}
+		String lower = command.replace('\\', '/').toLowerCase();
+		return lower.endsWith("/wsl.exe") || lower.endsWith("/wsl");
 	}
 
 	private void notifyProcessActivity() {
