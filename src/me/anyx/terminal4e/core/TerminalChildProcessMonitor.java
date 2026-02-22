@@ -23,8 +23,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 final class TerminalChildProcessMonitor {
+    private static final String DEBUG_KEY = "terminal4e.debug.childMonitor";
     private static final long ACTIVE_DEBOUNCE_MS = 1000;
     private static final long INACTIVE_THROTTLE_MS = 5000;
+    private static final boolean DEBUG_ENABLED = resolveDebugEnabled();
 
     private final long rootPid;
     private final WslContext wslContext;
@@ -110,6 +112,9 @@ final class TerminalChildProcessMonitor {
     }
 
     private void printDiagnostics(InspectionResult inspection) {
+        if (!DEBUG_ENABLED) {
+            return;
+        }
         String state = inspection.hasMeaningfulProcesses() ? "BLOCKING" : "IDLE";
         System.out.println("[terminal4e-monitor] state=" + state + " rootPid=" + rootPid + " shell="
                 + (shellSummary()) + " source=" + inspection.source);
@@ -157,6 +162,26 @@ final class TerminalChildProcessMonitor {
         if (lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat")) {
             result.add(lower.substring(0, lower.lastIndexOf('.')));
         }
+    }
+
+    private static boolean resolveDebugEnabled() {
+        String property = System.getProperty(DEBUG_KEY);
+        if (isTruthy(property)) {
+            return true;
+        }
+        String env = System.getenv("TERMINAL4E_DEBUG_CHILD_MONITOR");
+        return isTruthy(env);
+    }
+
+    private static boolean isTruthy(String value) {
+        if (value == null) {
+            return false;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return "1".equals(normalized)
+                || "true".equals(normalized)
+                || "yes".equals(normalized)
+                || "on".equals(normalized);
     }
 
     private static final class ProcessTreeInspector {
