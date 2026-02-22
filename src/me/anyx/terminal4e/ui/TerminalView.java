@@ -292,6 +292,14 @@ public class TerminalView extends ViewPart {
 			public void widgetSelected(SelectionEvent e) {
 				if (e.detail == SWT.CLOSE && e.item instanceof CTabItem) {
 					closeTab((CTabItem) e.item);
+					return;
+				}
+				if (e.item instanceof CTabItem) {
+					TerminalTab tab = (TerminalTab) ((CTabItem) e.item).getData("tab");
+					if (tab != null) {
+						focusBrowser(tab);
+						requestTerminalRefit(tab);
+					}
 				}
 			}
 		});
@@ -327,6 +335,7 @@ public class TerminalView extends ViewPart {
 				public Object function(Object[] arguments) {
 					tab.browserReady = true;
 					flushPendingOutput(tab);
+					requestTerminalRefit(tab);
 					focusBrowser(tab);
 					return null;
 				}
@@ -802,6 +811,16 @@ public class TerminalView extends ViewPart {
 		}
 		tab.browser.setFocus();
 		tab.browser.execute("window.terminal4eFocus && window.terminal4eFocus();");
+	}
+
+	private void requestTerminalRefit(TerminalTab tab) {
+		if (tab == null || tab.browser == null || tab.browser.isDisposed()) {
+			return;
+		}
+		if (!tab.browserReady) {
+			return;
+		}
+		tab.browser.execute("window.terminal4eRefit && window.terminal4eRefit();");
 	}
 
 	private void closeSelectedTab() {

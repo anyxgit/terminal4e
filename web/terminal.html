@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>terminal4e</title>
   <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css" />
   <style>
-    html, body {
+    html,
+    body {
       height: 100%;
       margin: 0;
       background: #1e1e1e;
       overflow: hidden;
     }
+
     #terminal {
       width: 100%;
       height: 100%;
@@ -19,13 +22,14 @@
   </style>
   <script type="text/javascript">
     if (!window.terminal4eReady) {
-        if (console && console.warn) {
-            console.warn("Failed inject terminal4e functions, reload page...")
-        }
-        location.reload();
+      if (console && console.warn) {
+        console.warn("Failed inject terminal4e functions, reload page...")
+      }
+      location.reload();
     }
   </script>
 </head>
+
 <body>
   <div id="terminal"></div>
   <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -75,6 +79,23 @@
       term.open(terminalElement);
       fitAddon.fit();
 
+      function hasUsableViewport() {
+        const width = terminalElement.clientWidth || 0;
+        const height = terminalElement.clientHeight || 0;
+        return width >= 40 && height >= 20;
+      }
+
+      function fitAndNotifyIfReady() {
+        fitAddon.fit();
+        if (!hasUsableViewport()) {
+          return;
+        }
+        if (term.cols <= 2 || term.rows <= 1) {
+          return;
+        }
+        notifyResize();
+      }
+
       function notifyResize() {
         if (window.terminal4eResize) {
           window.terminal4eResize(term.cols, term.rows);
@@ -92,9 +113,15 @@
       });
 
       window.addEventListener('resize', function () {
-        fitAddon.fit();
-        notifyResize();
+        fitAndNotifyIfReady();
       });
+
+      if (typeof ResizeObserver !== 'undefined') {
+        const resizeObserver = new ResizeObserver(function () {
+          fitAndNotifyIfReady();
+        });
+        resizeObserver.observe(terminalElement);
+      }
 
       window.terminal4eWrite = function (data) {
         term.write(data);
@@ -102,6 +129,10 @@
 
       window.terminal4eFocus = function () {
         term.focus();
+      };
+
+      window.terminal4eRefit = function () {
+        fitAndNotifyIfReady();
       };
 
       function getI18nMessage(key) {
@@ -274,7 +305,7 @@
         }
       }, true);
 
-      notifyResize();
+      fitAndNotifyIfReady();
       term.focus();
       if (window.terminal4eReady) {
         window.terminal4eReady();
@@ -282,4 +313,5 @@
     })();
   </script>
 </body>
+
 </html>
