@@ -38,6 +38,8 @@ import org.eclipse.swt.browser.Browser;
 import org.eclipse.swt.browser.BrowserFunction;
 import org.eclipse.swt.browser.LocationListener;
 import org.eclipse.swt.custom.CTabFolder;
+import org.eclipse.swt.custom.CTabFolder2Adapter;
+import org.eclipse.swt.custom.CTabFolderEvent;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
@@ -158,8 +160,8 @@ public class TerminalView extends ViewPart {
 						if (shellImage != null) {
 							action.setImageDescriptor(ImageDescriptor.createFromImage(shellImage));
 						} else {
-                            action.setImageDescriptor(Images.getImageDescriptor(Images.ICON_TERMINAL));
-                        }
+							action.setImageDescriptor(Images.getImageDescriptor(Images.ICON_TERMINAL));
+						}
 						manager.add(action);
 					}
 				}
@@ -237,10 +239,10 @@ public class TerminalView extends ViewPart {
 			}
 		}
 
-        initializeBrowser(tab);
-        item.setControl(content);
-        tabFolder.setSelection(item);
-        
+		initializeBrowser(tab);
+		item.setControl(content);
+		tabFolder.setSelection(item);
+
 		updateSessionSnapshot();
 		return tab;
 	}
@@ -274,6 +276,16 @@ public class TerminalView extends ViewPart {
 	}
 
 	private void hookTabFolderEvents() {
+		tabFolder.addCTabFolder2Listener(new CTabFolder2Adapter() {
+			@Override
+			public void close(CTabFolderEvent event) {
+				if (event.item instanceof CTabItem) {
+					closeTab((CTabItem) event.item, CloseReason.USER_ACTION);
+					event.doit = false; // prevent default close behavior since we're handling it
+				}
+			}
+		});
+
 		tabFolder.addSelectionListener(new SelectionAdapter() {
 			@Override
 			public void widgetSelected(SelectionEvent e) {
@@ -303,157 +315,157 @@ public class TerminalView extends ViewPart {
 		Activator.getLogger().info("Initializing browser for new tab: " + tab.shell.getLabel());
 		tab.browserReady = false;
 		tab.browser.addLocationListener(LocationListener.changingAdapter(e -> {
-		    if (!e.top) {
-		        return;
-		    }
-		    
-		    Activator.getLogger().info("Tab(" + tab.shell.getLabel() + ") browser location changing");
-		
-    		tab.readyFunction = new BrowserFunction(tab.browser, "terminal4eReady") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				tab.browserReady = true;
-    				flushPendingOutput(tab);
-    				focusBrowser(tab);
-    				return null;
-    			}
-    		};
-    		tab.inputFunction = new BrowserFunction(tab.browser, "terminal4eSendInput") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				String data = arguments != null && arguments.length > 0 && arguments[0] != null
-    						? String.valueOf(arguments[0])
-    						: "";
-    				handleInput(tab, data);
-    				return null;
-    			}
-    		};
-    		tab.resizeFunction = new BrowserFunction(tab.browser, "terminal4eResize") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				if (arguments == null || arguments.length < 2) {
-    					return null;
-    				}
-    				int cols = toInt(arguments[0]);
-    				int rows = toInt(arguments[1]);
-    				if (tab.session != null) {
-    					tab.session.setWindowSize(cols, rows);
-    				}
-    				return null;
-    			}
-    		};
-    		tab.titleFunction = new BrowserFunction(tab.browser, "terminal4eSetTitle") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				String title = arguments != null && arguments.length > 0 && arguments[0] != null
-    						? String.valueOf(arguments[0])
-    						: "";
-    				updateTabTitle(tab, title);
-    				return null;
-    			}
-    		};
-    		tab.confirmFunction = new BrowserFunction(tab.browser, "terminal4eConfirm") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				String title = arguments != null && arguments.length > 0 && arguments[0] != null
-    						? String.valueOf(arguments[0])
-    						: "确认";
-    				String message = arguments != null && arguments.length > 1 && arguments[1] != null
-    						? String.valueOf(arguments[1])
-    						: "";
-    				final boolean[] result = new boolean[] { false };
-    				Display display = tab.browser.getDisplay();
-    				if (display == null || display.isDisposed()) {
-    					return Boolean.FALSE;
-    				}
-    				display.syncExec(() -> {
-    					if (tab.browser == null || tab.browser.isDisposed()) {
-    						return;
-    					}
-    					result[0] = MessageDialog.openConfirm(tab.browser.getShell(), title, message);
-    				});
-    				return Boolean.valueOf(result[0]);
-    			}
-    		};
-    		tab.confirmMultilinePasteFunction = new BrowserFunction(tab.browser, "terminal4eConfirmMultilinePaste") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				String title = arguments != null && arguments.length > 0 && arguments[0] != null
-    						? String.valueOf(arguments[0])
-    						: "确认";
-    				String message = arguments != null && arguments.length > 1 && arguments[1] != null
-    						? String.valueOf(arguments[1])
-    						: "";
-    				String content = arguments != null && arguments.length > 2 && arguments[2] != null
-    						? String.valueOf(arguments[2])
-    						: "";
-    				return openMultilinePasteDialog(tab, title, message, content);
-    			}
-    		};
-    		tab.getMessageFunction = new BrowserFunction(tab.browser, "terminal4eGetMessage") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				if (arguments == null || arguments.length == 0 || arguments[0] == null) {
-    					return "";
-    				}
-    				String key = String.valueOf(arguments[0]);
-    				Object[] args = new Object[Math.max(0, arguments.length - 1)];
-    				for (int i = 0; i < args.length; i++) {
-    					args[i] = arguments[i + 1];
-    				}
-    				return Messages.getMessage(key, args);
-    			}
-    		};
-    		tab.getPreferenceFunction = new BrowserFunction(tab.browser, "terminal4eGetPreference") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				if (arguments == null || arguments.length == 0 || arguments[0] == null) {
-    					return "";
-    				}
-    				String key = String.valueOf(arguments[0]);
-    				if (Activator.PREF_CONFIRM_MULTILINE_PASTE.equals(key)) {
-    					return Boolean.valueOf(getPreferenceStore().getBoolean(Activator.PREF_CONFIRM_MULTILINE_PASTE));
-    				}
-    				return "";
-    			}
-    		};
-    		tab.readClipboardFunction = new BrowserFunction(tab.browser, "terminal4eReadClipboard") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				Display display = tab.browser.getDisplay();
-    				if (display == null || display.isDisposed()) {
-    					return "";
-    				}
-    				return readClipboardText(display);
-    			}
-    		};
-    		tab.writeClipboardFunction = new BrowserFunction(tab.browser, "terminal4eWriteClipboard") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				if (arguments == null || arguments.length == 0 || arguments[0] == null) {
-    					return null;
-    				}
-    				Display display = tab.browser.getDisplay();
-    				if (display == null || display.isDisposed()) {
-    					return null;
-    				}
-    				writeClipboardText(display, String.valueOf(arguments[0]));
-    				return null;
-    			}
-    		};
-    		tab.openLinkFunction = new BrowserFunction(tab.browser, "terminal4eOpenLink") {
-    			@Override
-    			public Object function(Object[] arguments) {
-    				if (arguments == null || arguments.length == 0 || arguments[0] == null) {
-    					return null;
-    				}
-    				String url = String.valueOf(arguments[0]);
-    				Program.launch(url);
-    				return null;
-    			}
-    		};
+			if (!e.top) {
+				return;
+			}
 
-        }));
+			Activator.getLogger().info("Tab(" + tab.shell.getLabel() + ") browser location changing");
+
+			tab.readyFunction = new BrowserFunction(tab.browser, "terminal4eReady") {
+				@Override
+				public Object function(Object[] arguments) {
+					tab.browserReady = true;
+					flushPendingOutput(tab);
+					focusBrowser(tab);
+					return null;
+				}
+			};
+			tab.inputFunction = new BrowserFunction(tab.browser, "terminal4eSendInput") {
+				@Override
+				public Object function(Object[] arguments) {
+					String data = arguments != null && arguments.length > 0 && arguments[0] != null
+							? String.valueOf(arguments[0])
+							: "";
+					handleInput(tab, data);
+					return null;
+				}
+			};
+			tab.resizeFunction = new BrowserFunction(tab.browser, "terminal4eResize") {
+				@Override
+				public Object function(Object[] arguments) {
+					if (arguments == null || arguments.length < 2) {
+						return null;
+					}
+					int cols = toInt(arguments[0]);
+					int rows = toInt(arguments[1]);
+					if (tab.session != null) {
+						tab.session.setWindowSize(cols, rows);
+					}
+					return null;
+				}
+			};
+			tab.titleFunction = new BrowserFunction(tab.browser, "terminal4eSetTitle") {
+				@Override
+				public Object function(Object[] arguments) {
+					String title = arguments != null && arguments.length > 0 && arguments[0] != null
+							? String.valueOf(arguments[0])
+							: "";
+					updateTabTitle(tab, title);
+					return null;
+				}
+			};
+			tab.confirmFunction = new BrowserFunction(tab.browser, "terminal4eConfirm") {
+				@Override
+				public Object function(Object[] arguments) {
+					String title = arguments != null && arguments.length > 0 && arguments[0] != null
+							? String.valueOf(arguments[0])
+							: "确认";
+					String message = arguments != null && arguments.length > 1 && arguments[1] != null
+							? String.valueOf(arguments[1])
+							: "";
+					final boolean[] result = new boolean[] { false };
+					Display display = tab.browser.getDisplay();
+					if (display == null || display.isDisposed()) {
+						return Boolean.FALSE;
+					}
+					display.syncExec(() -> {
+						if (tab.browser == null || tab.browser.isDisposed()) {
+							return;
+						}
+						result[0] = MessageDialog.openConfirm(tab.browser.getShell(), title, message);
+					});
+					return Boolean.valueOf(result[0]);
+				}
+			};
+			tab.confirmMultilinePasteFunction = new BrowserFunction(tab.browser, "terminal4eConfirmMultilinePaste") {
+				@Override
+				public Object function(Object[] arguments) {
+					String title = arguments != null && arguments.length > 0 && arguments[0] != null
+							? String.valueOf(arguments[0])
+							: "确认";
+					String message = arguments != null && arguments.length > 1 && arguments[1] != null
+							? String.valueOf(arguments[1])
+							: "";
+					String content = arguments != null && arguments.length > 2 && arguments[2] != null
+							? String.valueOf(arguments[2])
+							: "";
+					return openMultilinePasteDialog(tab, title, message, content);
+				}
+			};
+			tab.getMessageFunction = new BrowserFunction(tab.browser, "terminal4eGetMessage") {
+				@Override
+				public Object function(Object[] arguments) {
+					if (arguments == null || arguments.length == 0 || arguments[0] == null) {
+						return "";
+					}
+					String key = String.valueOf(arguments[0]);
+					Object[] args = new Object[Math.max(0, arguments.length - 1)];
+					for (int i = 0; i < args.length; i++) {
+						args[i] = arguments[i + 1];
+					}
+					return Messages.getMessage(key, args);
+				}
+			};
+			tab.getPreferenceFunction = new BrowserFunction(tab.browser, "terminal4eGetPreference") {
+				@Override
+				public Object function(Object[] arguments) {
+					if (arguments == null || arguments.length == 0 || arguments[0] == null) {
+						return "";
+					}
+					String key = String.valueOf(arguments[0]);
+					if (Activator.PREF_CONFIRM_MULTILINE_PASTE.equals(key)) {
+						return Boolean.valueOf(getPreferenceStore().getBoolean(Activator.PREF_CONFIRM_MULTILINE_PASTE));
+					}
+					return "";
+				}
+			};
+			tab.readClipboardFunction = new BrowserFunction(tab.browser, "terminal4eReadClipboard") {
+				@Override
+				public Object function(Object[] arguments) {
+					Display display = tab.browser.getDisplay();
+					if (display == null || display.isDisposed()) {
+						return "";
+					}
+					return readClipboardText(display);
+				}
+			};
+			tab.writeClipboardFunction = new BrowserFunction(tab.browser, "terminal4eWriteClipboard") {
+				@Override
+				public Object function(Object[] arguments) {
+					if (arguments == null || arguments.length == 0 || arguments[0] == null) {
+						return null;
+					}
+					Display display = tab.browser.getDisplay();
+					if (display == null || display.isDisposed()) {
+						return null;
+					}
+					writeClipboardText(display, String.valueOf(arguments[0]));
+					return null;
+				}
+			};
+			tab.openLinkFunction = new BrowserFunction(tab.browser, "terminal4eOpenLink") {
+				@Override
+				public Object function(Object[] arguments) {
+					if (arguments == null || arguments.length == 0 || arguments[0] == null) {
+						return null;
+					}
+					String url = String.valueOf(arguments[0]);
+					Program.launch(url);
+					return null;
+				}
+			};
+
+		}));
 		loadTerminalPage(tab);
 	}
 
@@ -526,14 +538,14 @@ public class TerminalView extends ViewPart {
 			tab.workingDirectory = workingDirectory;
 			tab.environment = environment;
 			tab.session.start(shell, charset, workingDirectory, environment, text -> appendOutput(tab, text),
-				exitCode -> handleSessionExit(tab, exitCode));
+					exitCode -> handleSessionExit(tab, exitCode));
 			if (tab.environment == null) {
 				tab.environment = tab.session.getEnvironment();
 			}
 			updateSessionSnapshot();
 		} catch (IOException ex) {
-		    String errorMsg = NLS.bind(Messages.TerminalView_FailedToStartShell, shell.getLabel(), ex.getMessage());
-		    Activator.getLogger().error(errorMsg, ex);
+			String errorMsg = NLS.bind(Messages.TerminalView_FailedToStartShell, shell.getLabel(), ex.getMessage());
+			Activator.getLogger().error(errorMsg, ex);
 			appendOutput(tab, errorMsg + System.lineSeparator());
 		}
 	}
@@ -769,7 +781,10 @@ public class TerminalView extends ViewPart {
 		if (tab.exited) {
 			return false;
 		}
-		return tab.session.isRunning();
+		if (tab.session.hasChildProcesses()) {
+			return true;
+		}
+		return false;
 	}
 
 	private void handleSessionExit(TerminalTab tab, int exitCode) {

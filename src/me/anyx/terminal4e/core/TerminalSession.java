@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +30,9 @@ public class TerminalSession {
 	private volatile Path workingDirectory;
 	private volatile ShellDescriptor shell;
 	private volatile Map<String, String> environment = Collections.emptyMap();
+	private volatile long shellPid = -1;
+	private volatile boolean hasChildProcesses;
+	private volatile TerminalChildProcessMonitor childProcessMonitor;
 	private final AtomicBoolean exitNotified = new AtomicBoolean(false);
 
 	public boolean isRunning() {
@@ -45,6 +49,14 @@ public class TerminalSession {
 
 	public Map<String, String> getEnvironment() {
 		return environment;
+	}
+
+	public long getShellPid() {
+		return shellPid;
+	}
+
+	public boolean hasChildProcesses() {
+		return hasChildProcesses;
 	}
 
 	public void start(ShellDescriptor shell, Consumer<String> output) throws IOException {
@@ -80,6 +92,9 @@ public class TerminalSession {
 		process = builder.start();
 		stdin = process.getOutputStream();
 		running.set(true);
+		shellPid = resolveProcessPid(process);
+		hasChildProcesses = false;
+		startChildProcessMonitor();
 		applyWindowSize();
 
 		stdoutThread = createReaderThread(process.getInputStream(), output, "terminal-pty");
@@ -90,6 +105,7 @@ public class TerminalSession {
 
 	public void stop() {
 		running.set(false);
+		stopChildProcessMonitor();
 		if (process != null) {
 			process.destroy();
 		}
@@ -108,6 +124,7 @@ public class TerminalSession {
 		if (!running.get() || stdin == null || data == null || data.isEmpty()) {
 			return;
 		}
+		notifyInput();
 		stdin.write(data.getBytes(charset));
 		stdin.flush();
 	}
@@ -126,6 +143,7 @@ public class TerminalSession {
 				int read;
 				while (running.get() && (read = reader.read(buffer)) != -1) {
 					if (read > 0) {
+						notifyOutput();
 						String chunk = new String(buffer, 0, read);
 						output.accept(chunk);
 					}
@@ -149,6 +167,9 @@ public class TerminalSession {
 				Thread.currentThread().interrupt();
 			} finally {
 				running.set(false);
+				stopChildProcessMonitor();
+				hasChildProcesses = false;
+				shellPid = -1;
 				if (exitHandler != null && exitNotified.compareAndSet(false, true)) {
 					exitHandler.accept(code);
 				}
@@ -200,5 +221,55 @@ public class TerminalSession {
 		}
 		String lower = command.replace('\\', '/').toLowerCase();
 		return lower.contains("/git/") && lower.endsWith("/bash.exe");
+	}
+
+	private void startChildProcessMonitor() {
+		if (shellPid <= 0) {
+			return;
+		}
+		TerminalChildProcessMonitor monitor = new TerminalChildProcessMonitor(shellPid, shell,
+				state -> hasChildProcesses = state.booleanValue());
+		childProcessMonitor = monitor;
+		monitor.start();
+	}
+
+	private void stopChildProcessMonitor() {
+		TerminalChildProcessMonitor monitor = childProcessMonitor;
+		childProcessMonitor = null;
+		if (monitor != null) {
+			monitor.stop();
+		}
+	}
+
+	private void notifyInput() {
+		TerminalChildProcessMonitor monitor = childProcessMonitor;
+		if (monitor != null) {
+			monitor.handleInput();
+		}
+	}
+
+	private void notifyOutput() {
+		TerminalChildProcessMonitor monitor = childProcessMonitor;
+		if (monitor != null) {
+			monitor.handleOutput();
+		}
+	}
+
+	private long resolveProcessPid(PtyProcess process) {
+		if (process == null) {
+			return -1;
+		}
+		String[] methodCandidates = new String[] { "pid", "getPid", "getProcessId" };
+		for (String methodName : methodCandidates) {
+			try {
+				Method method = process.getClass().getMethod(methodName);
+				Object value = method.invoke(process);
+				if (value instanceof Number) {
+					return ((Number) value).longValue();
+				}
+			} catch (Exception ignored) {
+			}
+		}
+		return -1;
 	}
 }
