@@ -74,6 +74,7 @@ import me.anyx.terminal4e.core.TerminalSession;
 
 public class TerminalView extends ViewPart {
 	public static final String ID = TerminalView.class.getName();
+	private static final String TAB_BUSY_PREFIX = "▣ ";
 	private static final char SNAPSHOT_SEP = '|';
 	private static final char SNAPSHOT_ESC = '\\';
 	private static final char ENV_PAIR_SEP = ';';
@@ -539,6 +540,7 @@ public class TerminalView extends ViewPart {
 			tab.environment = environment;
 			tab.session.start(shell, charset, workingDirectory, environment, text -> appendOutput(tab, text),
 					exitCode -> handleSessionExit(tab, exitCode));
+			bindProcessActivity(tab);
 			if (tab.environment == null) {
 				tab.environment = tab.session.getEnvironment();
 			}
@@ -559,7 +561,7 @@ public class TerminalView extends ViewPart {
 			title = tab.fallbackTitle;
 		}
 		tab.defaultTitle = title;
-		tab.item.setText(title);
+		applyTabTitleAndTooltip(tab, title);
 	}
 
 	private void updateTabTitle(TerminalTab tab, String title) {
@@ -578,9 +580,80 @@ public class TerminalView extends ViewPart {
 		}
 		display.asyncExec(() -> {
 			if (tab.item != null && !tab.item.isDisposed()) {
-				tab.item.setText(finalTitle);
+				applyTabTitleAndTooltip(tab, finalTitle);
 			}
 		});
+	}
+
+	private void bindProcessActivity(TerminalTab tab) {
+		if (tab == null || tab.session == null) {
+			return;
+		}
+		tab.session.setProcessActivityListener(activity -> {
+			if (tab.item == null || tab.item.isDisposed()) {
+				return;
+			}
+			Display display = tab.item.getDisplay();
+			if (display == null || display.isDisposed()) {
+				return;
+			}
+			display.asyncExec(() -> {
+				if (tab.item == null || tab.item.isDisposed()) {
+					return;
+				}
+				String currentTitle = stripBusyPrefix(tab.item.getText());
+				if (currentTitle == null || currentTitle.trim().isEmpty()) {
+					currentTitle = tab.defaultTitle;
+				}
+				applyTabTitleAndTooltip(tab, currentTitle);
+			});
+		});
+	}
+
+	private void applyTabTitleAndTooltip(TerminalTab tab, String baseTitle) {
+		if (tab == null || tab.item == null || tab.item.isDisposed()) {
+			return;
+		}
+		String title = baseTitle == null ? "" : baseTitle.trim();
+		if (title.isEmpty()) {
+			title = tab.fallbackTitle;
+		}
+		String decorated = title;
+		if (tab.session != null && tab.session.hasChildProcesses()) {
+			decorated = TAB_BUSY_PREFIX + title;
+		}
+		tab.item.setText(decorated);
+		tab.item.setToolTipText(buildRunningProcessesTooltip(tab));
+	}
+
+	private String buildRunningProcessesTooltip(TerminalTab tab) {
+		if (tab == null || tab.session == null || !tab.session.hasChildProcesses()) {
+			return null;
+		}
+		List<String> names = tab.session.getActiveProcessNames();
+		if (names == null || names.isEmpty()) {
+			return null;
+		}
+		StringBuilder tooltip = new StringBuilder();
+		tooltip.append(NLS.bind(Messages.TerminalView_RunningProcessesTooltipTitle, Integer.toString(names.size())));
+		for (String name : names) {
+			if (name == null || name.trim().isEmpty()) {
+				continue;
+			}
+			tooltip.append(System.lineSeparator());
+			tooltip.append(Messages.TerminalView_RunningProcessesTooltipItemPrefix).append(name.trim());
+		}
+		return tooltip.toString();
+	}
+
+	private String stripBusyPrefix(String title) {
+		if (title == null) {
+			return "";
+		}
+		if (title.startsWith(TAB_BUSY_PREFIX)) {
+			return title.substring(TAB_BUSY_PREFIX.length());
+		}
+		return title;
 	}
 
 	private void handleInput(TerminalTab tab, String data) {
@@ -1066,7 +1139,7 @@ public class TerminalView extends ViewPart {
 			String shellId = tab.shell != null ? nullToEmpty(tab.shell.getId()) : "";
 			String workingDir = tab.workingDirectory != null ? tab.workingDirectory.toString() : "";
 			String charsetName = tab.charset != null ? tab.charset.name() : "";
-			String title = item.getText();
+			String title = stripBusyPrefix(item.getText());
 			String environment = serializeEnvironment(tab.environment);
 			sb.append(encodeSnapshotField(shellId));
 			sb.append(SNAPSHOT_SEP);
@@ -1131,7 +1204,7 @@ public class TerminalView extends ViewPart {
 			return;
 		}
 		tab.defaultTitle = trimmed;
-		tab.item.setText(trimmed);
+		applyTabTitleAndTooltip(tab, trimmed);
 	}
 
 	private static String serializeEnvironment(Map<String, String> environment) {

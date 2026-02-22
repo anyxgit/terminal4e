@@ -32,7 +32,9 @@ public class TerminalSession {
 	private volatile Map<String, String> environment = Collections.emptyMap();
 	private volatile long shellPid = -1;
 	private volatile boolean hasChildProcesses;
+	private volatile List<String> activeProcessNames = Collections.emptyList();
 	private volatile TerminalChildProcessMonitor childProcessMonitor;
+	private volatile Consumer<ProcessActivity> processActivityListener;
 	private final AtomicBoolean exitNotified = new AtomicBoolean(false);
 
 	public boolean isRunning() {
@@ -57,6 +59,15 @@ public class TerminalSession {
 
 	public boolean hasChildProcesses() {
 		return hasChildProcesses;
+	}
+
+	public List<String> getActiveProcessNames() {
+		return activeProcessNames;
+	}
+
+	public void setProcessActivityListener(Consumer<ProcessActivity> listener) {
+		this.processActivityListener = listener;
+		notifyProcessActivity();
 	}
 
 	public void start(ShellDescriptor shell, Consumer<String> output) throws IOException {
@@ -94,6 +105,8 @@ public class TerminalSession {
 		running.set(true);
 		shellPid = resolveProcessPid(process);
 		hasChildProcesses = false;
+		activeProcessNames = Collections.emptyList();
+		notifyProcessActivity();
 		startChildProcessMonitor();
 		applyWindowSize();
 
@@ -106,6 +119,9 @@ public class TerminalSession {
 	public void stop() {
 		running.set(false);
 		stopChildProcessMonitor();
+		hasChildProcesses = false;
+		activeProcessNames = Collections.emptyList();
+		notifyProcessActivity();
 		if (process != null) {
 			process.destroy();
 		}
@@ -169,7 +185,9 @@ public class TerminalSession {
 				running.set(false);
 				stopChildProcessMonitor();
 				hasChildProcesses = false;
+				activeProcessNames = Collections.emptyList();
 				shellPid = -1;
+				notifyProcessActivity();
 				if (exitHandler != null && exitNotified.compareAndSet(false, true)) {
 					exitHandler.accept(code);
 				}
@@ -228,7 +246,11 @@ public class TerminalSession {
 			return;
 		}
 		TerminalChildProcessMonitor monitor = new TerminalChildProcessMonitor(shellPid, shell,
-				state -> hasChildProcesses = state.booleanValue());
+				state -> {
+					hasChildProcesses = state.hasChildProcesses();
+					activeProcessNames = state.getProcessNames();
+					notifyProcessActivity();
+				});
 		childProcessMonitor = monitor;
 		monitor.start();
 	}
@@ -271,5 +293,32 @@ public class TerminalSession {
 			}
 		}
 		return -1;
+	}
+
+	private void notifyProcessActivity() {
+		Consumer<ProcessActivity> listener = processActivityListener;
+		if (listener == null) {
+			return;
+		}
+		listener.accept(new ProcessActivity(hasChildProcesses, activeProcessNames));
+	}
+
+	public static final class ProcessActivity {
+		private final boolean hasChildProcesses;
+		private final List<String> processNames;
+
+		public ProcessActivity(boolean hasChildProcesses, List<String> processNames) {
+			this.hasChildProcesses = hasChildProcesses;
+			this.processNames = processNames == null ? Collections.emptyList()
+					: Collections.unmodifiableList(new java.util.ArrayList<>(processNames));
+		}
+
+		public boolean hasChildProcesses() {
+			return hasChildProcesses;
+		}
+
+		public List<String> getProcessNames() {
+			return processNames;
+		}
 	}
 }

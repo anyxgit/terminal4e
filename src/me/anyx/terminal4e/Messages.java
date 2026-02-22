@@ -24,6 +24,8 @@ public final class Messages extends NLS {
 	public static String TerminalView_ConfirmPasteTitle;
 	public static String TerminalView_ConfirmPasteMessage;
 	public static String TerminalView_OmittedSuffix;
+	public static String TerminalView_RunningProcessesTooltipTitle;
+	public static String TerminalView_RunningProcessesTooltipItemPrefix;
 
 	public static String TerminalPreference_Description;
 	public static String TerminalPreference_Language;
