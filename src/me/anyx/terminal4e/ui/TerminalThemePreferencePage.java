@@ -21,6 +21,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Link;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
@@ -154,26 +155,24 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
         deleteCustomButton.setText(Messages.TerminalPreference_Remove);
         deleteCustomButton.addListener(SWT.Selection, e -> deleteCurrentCustomTheme());
 
+        colorPreviewGrid = new Composite(group, SWT.NONE);
+        colorPreviewGrid.setLayoutData(new GridData(SWT.BEGINNING, SWT.FILL, true, false, 2, 1));
+        colorPreviewGrid.setLayout(new GridLayout(1, false));
+
         Composite fontRow = new Composite(group, SWT.NONE);
         fontRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 2, 1));
-        GridLayout fontLayout = new GridLayout(2, false);
+        GridLayout fontLayout = new GridLayout(1, false);
         fontLayout.marginWidth = 0;
         fontLayout.marginHeight = 0;
         fontLayout.horizontalSpacing = COMPACT_SPACING;
         fontRow.setLayout(fontLayout);
 
-        Label fontHint = new Label(fontRow, SWT.NONE);
-        fontHint.setText(Messages.TerminalThemePreference_FontHint);
-
-        Button openFontSettingsButton = new Button(fontRow, SWT.PUSH);
-        openFontSettingsButton.setText(Messages.TerminalThemePreference_OpenFontSettings);
-        openFontSettingsButton.addListener(SWT.Selection, e -> PreferencesUtil
+        Link openFontSettingsLink = new Link(fontRow, SWT.NONE);
+        openFontSettingsLink.setText(Messages.TerminalThemePreference_FontHint
+            + "<a>" + Messages.TerminalThemePreference_OpenFontSettings + "</a>");
+        openFontSettingsLink.addListener(SWT.Selection, e -> PreferencesUtil
             .createPreferenceDialogOn(getShell(), "org.eclipse.ui.preferencePages.ColorsAndFonts", null, null)
             .open());
-
-        colorPreviewGrid = new Composite(group, SWT.NONE);
-        colorPreviewGrid.setLayoutData(new GridData(SWT.BEGINNING, SWT.FILL, true, true, 2, 1));
-        colorPreviewGrid.setLayout(new GridLayout(1, false));
     }
 
     private void refillThemeSelector() {
