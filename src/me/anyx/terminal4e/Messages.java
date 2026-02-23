@@ -93,6 +93,8 @@ public final class Messages extends NLS {
 	public static String TerminalThemePreference_ThemeCustom;
 	public static String TerminalThemePreference_ThemeLight;
 	public static String TerminalThemePreference_ThemeDark;
+	public static String TerminalThemePreference_FontHint;
+	public static String TerminalThemePreference_OpenFontSettings;
 
 	public static String Charset_Default;
 

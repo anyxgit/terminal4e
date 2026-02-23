@@ -65,13 +65,54 @@
         };
       }
 
+      function getInitialFont() {
+        if (window.terminal4eGetFont) {
+          try {
+            const raw = window.terminal4eGetFont();
+            if (raw && typeof raw === 'string') {
+              return JSON.parse(raw);
+            }
+            if (raw && typeof raw === 'object') {
+              return raw;
+            }
+          } catch (error) {
+            if (console && console.warn) {
+              console.warn('Failed to parse terminal font from host.', error);
+            }
+          }
+        }
+        return {
+          family: 'monospace',
+          size: 12,
+          weight: 'normal'
+        };
+      }
+
+      function normalizeFontWeight(weight) {
+        if (typeof weight === 'number') {
+          return String(weight);
+        }
+        if (typeof weight !== 'string') {
+          return 'normal';
+        }
+        const trimmed = weight.trim().toLowerCase();
+        if (!trimmed) {
+          return 'normal';
+        }
+        return trimmed;
+      }
+
       const activeTheme = getInitialTheme();
+      const activeFont = getInitialFont();
       const term = new Terminal({
         cursorBlink: true,
         convertEol: true,
         cols: 80,
         rows: 24,
         theme: activeTheme,
+        fontFamily: activeFont.family || 'monospace',
+        fontSize: Number(activeFont.size) > 0 ? Number(activeFont.size) : 16,
+        fontWeight: normalizeFontWeight(activeFont.weight),
         allowProposedApi: true
       });
       const fitAddon = new FitAddon.FitAddon();
@@ -114,7 +155,21 @@
         }
       }
 
+      function applyFont(font) {
+        if (!font || typeof font !== 'object') {
+          return;
+        }
+        const family = typeof font.family === 'string' && font.family.trim() ? font.family : 'monospace';
+        const size = Number(font.size) > 0 ? Number(font.size) : 16;
+        const weight = normalizeFontWeight(font.weight);
+        term.options.fontFamily = family;
+        term.options.fontSize = size;
+        term.options.fontWeight = weight;
+        fitAndNotifyIfReady();
+      }
+
       applyTheme(activeTheme);
+      applyFont(activeFont);
 
       function hasUsableViewport() {
         const width = terminalElement.clientWidth || 0;
@@ -174,6 +229,10 @@
 
       window.terminal4eApplyTheme = function (theme) {
         applyTheme(theme);
+      };
+
+      window.terminal4eApplyFont = function (font) {
+        applyFont(font);
       };
 
       function getI18nMessage(key) {

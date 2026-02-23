@@ -9,8 +9,11 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.resource.FontRegistry;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.FontData;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.themes.ITheme;
@@ -20,6 +23,7 @@ import me.anyx.terminal4e.Activator;
 final class TerminalThemeStore {
     static final String MODE_FOLLOW = "follow";
     static final String MODE_FIXED = "fixed";
+    static final String TERMINAL_FONT_DEFINITION_ID = "me.anyx.terminal4e.theme.font.terminal";
 
     private static final char SEP = '|';
     private static final char ESC = '\\';
@@ -131,7 +135,7 @@ final class TerminalThemeStore {
             String themeId = dark
                     ? "dark-plus"
                     : "light-plus";
-            
+
             for (TerminalTheme terminalTheme : BUILTIN_THEMES) {
                 if (themeId.equals(terminalTheme.id)) {
                     return terminalTheme;
@@ -160,6 +164,55 @@ final class TerminalThemeStore {
             sb.append('"').append(key).append('"').append(':');
             sb.append('"').append(normalizeHex(safe.getColor(key))).append('"');
         }
+        sb.append('}');
+        return sb.toString();
+    }
+
+    static TerminalFont resolveTerminalFont() {
+        try {
+            if (PlatformUI.isWorkbenchRunning() && PlatformUI.getWorkbench() != null
+                    && PlatformUI.getWorkbench().getThemeManager() != null
+                    && PlatformUI.getWorkbench().getThemeManager().getCurrentTheme() != null) {
+                ITheme theme = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme();
+                FontRegistry registry = theme.getFontRegistry();
+                FontData[] fontData = registry == null ? null : registry.getFontData(TERMINAL_FONT_DEFINITION_ID);
+                if (fontData != null && fontData.length > 0 && fontData[0] != null) {
+                    FontData first = fontData[0];
+                    int size = pointsToPixels(first.getHeight());
+                    if (size <= 0) {
+                        size = pointsToPixels(12);
+                    }
+                    String family = first.getName();
+                    if (family == null || family.trim().isEmpty()) {
+                        family = "monospace";
+                    }
+                    String weight = (first.getStyle() & SWT.BOLD) != 0 ? "bold" : "normal";
+                    return new TerminalFont(family, size, weight);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return new TerminalFont("monospace", pointsToPixels(12), "normal");
+    }
+
+    static String toJsonFont(TerminalFont font) {
+        TerminalFont safe = font == null ? new TerminalFont("monospace", 12, "normal") : font;
+        String family = safe.getFamily();
+        if (family == null || family.trim().isEmpty()) {
+            family = "monospace";
+        }
+        int size = safe.getSize() <= 0 ? 12 : safe.getSize();
+        String weight = safe.getWeight();
+        if (weight == null || weight.trim().isEmpty()) {
+            weight = "normal";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append('{');
+        sb.append("\"family\":\"").append(escapeJson(family)).append("\"");
+        sb.append(',');
+        sb.append("\"size\":").append(size);
+        sb.append(',');
+        sb.append("\"weight\":\"").append(escapeJson(weight)).append("\"");
         sb.append('}');
         return sb.toString();
     }
@@ -259,6 +312,49 @@ final class TerminalThemeStore {
         return raw.matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$");
     }
 
+    private static String escapeJson(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(text.length() + 8);
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                default:
+                    sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static int pointsToPixels(int points) {
+        int pt = points <= 0 ? 12 : points;
+        Display display = Display.getDefault();
+        int dpiY = 96;
+        if (display != null && !display.isDisposed()) {
+            Point dpi = display.getDPI();
+            if (dpi != null && dpi.y > 0) {
+                dpiY = dpi.y;
+            }
+        }
+        return (int) Math.round(pt * dpiY / 72.0d);
+    }
+
     private static Map<String, String> completeColors(Map<String, String> source, boolean dark) {
         Map<String, String> defaults = dark
                 ? findThemeById(null, "dark-plus").colors
@@ -355,6 +451,30 @@ final class TerminalThemeStore {
                 return normalizeHex(color);
             }
             return "#000000";
+        }
+    }
+
+    static final class TerminalFont {
+        private final String family;
+        private final int size;
+        private final String weight;
+
+        TerminalFont(String family, int size, String weight) {
+            this.family = family == null ? "monospace" : family;
+            this.size = size;
+            this.weight = weight == null ? "normal" : weight;
+        }
+
+        String getFamily() {
+            return family;
+        }
+
+        int getSize() {
+            return size;
+        }
+
+        String getWeight() {
+            return weight;
         }
     }
 }

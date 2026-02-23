@@ -137,14 +137,19 @@ public class TerminalView extends ViewPart {
 				eclipseThemeChangeListener = new IPropertyChangeListener() {
 					@Override
 					public void propertyChange(PropertyChangeEvent event) {
-					    if (!"org.eclipse.ui.workbench.HOVER_BACKGROUND".equals(event.getProperty())) {
-					        return;
-					    }
+						String property = event == null ? null : event.getProperty();
+						if (property == null) {
+							return;
+						}
+						if (!"org.eclipse.ui.workbench.HOVER_BACKGROUND".equals(property)
+								&& !TerminalThemeStore.TERMINAL_FONT_DEFINITION_ID.equals(property)
+								&& !"currentTheme".equals(property)) {
+							return;
+						}
 						Display display = tabFolder == null ? null : tabFolder.getDisplay();
 						if (display == null || display.isDisposed()) {
 							return;
 						}
-//						System.out.println(event.getProperty() + ": " + event.getOldValue() + " -> " + event.getNewValue());
 						display.asyncExec(() -> applyThemeToAllTabs());
 					}
 				};
@@ -495,6 +500,13 @@ public class TerminalView extends ViewPart {
 					TerminalThemeStore.TerminalTheme theme = TerminalThemeStore
 							.resolveActiveTheme(getPreferenceStore());
 					return TerminalThemeStore.toJsonTheme(theme);
+				}
+			};
+			tab.getFontFunction = new BrowserFunction(tab.browser, "terminal4eGetFont") {
+				@Override
+				public Object function(Object[] arguments) {
+					TerminalThemeStore.TerminalFont font = TerminalThemeStore.resolveTerminalFont();
+					return TerminalThemeStore.toJsonFont(font);
 				}
 			};
 			tab.readClipboardFunction = new BrowserFunction(tab.browser, "terminal4eReadClipboard") {
@@ -1018,6 +1030,10 @@ public class TerminalView extends ViewPart {
 			tab.getThemeFunction.dispose();
 			tab.getThemeFunction = null;
 		}
+		if (tab.getFontFunction != null) {
+			tab.getFontFunction.dispose();
+			tab.getFontFunction = null;
+		}
 		if (tab.readClipboardFunction != null) {
 			tab.readClipboardFunction.dispose();
 			tab.readClipboardFunction = null;
@@ -1039,6 +1055,9 @@ public class TerminalView extends ViewPart {
 		TerminalThemeStore.TerminalTheme theme = TerminalThemeStore.resolveActiveTheme(getPreferenceStore());
 		String themeJson = TerminalThemeStore.toJsonTheme(theme);
 		tab.browser.execute("window.terminal4eApplyTheme && window.terminal4eApplyTheme(" + themeJson + ");");
+		TerminalThemeStore.TerminalFont font = TerminalThemeStore.resolveTerminalFont();
+		String fontJson = TerminalThemeStore.toJsonFont(font);
+		tab.browser.execute("window.terminal4eApplyFont && window.terminal4eApplyFont(" + fontJson + ");");
 	}
 
 	private void applyThemeToAllTabs() {
@@ -1527,6 +1546,7 @@ public class TerminalView extends ViewPart {
 		private BrowserFunction getMessageFunction;
 		private BrowserFunction getPreferenceFunction;
 		private BrowserFunction getThemeFunction;
+		private BrowserFunction getFontFunction;
 		private BrowserFunction readClipboardFunction;
 		private BrowserFunction writeClipboardFunction;
 		private BrowserFunction openLinkFunction;

@@ -39,6 +39,19 @@
             class="me.anyx.terminal4e.ui.ProjectTerminalAutoOpenStartup">
         </startup>
     </extension>
+    <extension
+        point="org.eclipse.ui.themes">
+        <themeElementCategory
+            id="me.anyx.terminal4e.theme.category"
+            label="%theme.category.name">
+        </themeElementCategory>
+        <fontDefinition
+            id="me.anyx.terminal4e.theme.font.terminal"
+            label="%theme.font.terminal.name"
+            categoryId="me.anyx.terminal4e.theme.category"
+            defaultsTo="org.eclipse.jface.textfont">
+        </fontDefinition>
+    </extension>
     <!-- Commands contributions -->
     <extension
         point="org.eclipse.ui.commands">

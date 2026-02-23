@@ -14,6 +14,7 @@ import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.ColorDialog;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
@@ -23,6 +24,7 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
+import org.eclipse.ui.dialogs.PreferencesUtil;
 
 import me.anyx.terminal4e.Activator;
 import me.anyx.terminal4e.Messages;
@@ -39,7 +41,7 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
 
     private Composite colorPreviewGrid;
     private final Map<String, String> previewColorValues = new LinkedHashMap<>();
-    private final Map<String, Button> previewColorButtons = new LinkedHashMap<>();
+    private final Map<String, Canvas> previewColorButtons = new LinkedHashMap<>();
 
     private final List<TerminalThemeStore.TerminalTheme> customThemes = new ArrayList<>();
     private final LinkedHashMap<String, TerminalThemeStore.TerminalTheme> themesById = new LinkedHashMap<>();
@@ -142,6 +144,23 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
         Button saveCustomButton = new Button(saveRow, SWT.PUSH);
         saveCustomButton.setText(Messages.TerminalThemePreference_CustomizeSaveAs);
         saveCustomButton.addListener(SWT.Selection, e -> saveCurrentAsCustomTheme());
+
+        Composite fontRow = new Composite(group, SWT.NONE);
+        fontRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 2, 1));
+        GridLayout fontLayout = new GridLayout(2, false);
+        fontLayout.marginWidth = 0;
+        fontLayout.marginHeight = 0;
+        fontLayout.horizontalSpacing = COMPACT_SPACING;
+        fontRow.setLayout(fontLayout);
+
+        Label fontHint = new Label(fontRow, SWT.NONE);
+        fontHint.setText(Messages.TerminalThemePreference_FontHint);
+
+        Button openFontSettingsButton = new Button(fontRow, SWT.PUSH);
+        openFontSettingsButton.setText(Messages.TerminalThemePreference_OpenFontSettings);
+        openFontSettingsButton.addListener(SWT.Selection, e -> PreferencesUtil
+            .createPreferenceDialogOn(getShell(), "org.eclipse.ui.preferencePages.ColorsAndFonts", null, null)
+            .open());
 
         colorPreviewGrid = new Composite(group, SWT.NONE);
         colorPreviewGrid.setLayoutData(new GridData(SWT.BEGINNING, SWT.FILL, true, true, 2, 1));
@@ -315,42 +334,59 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
         text.setText(label);
         text.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false));
 
-        Button swatch = new Button(parent, SWT.PUSH);
+        Canvas swatch = new Canvas(parent, SWT.NONE);
         GridData swatchData = new GridData(SWT.LEFT, SWT.CENTER, false, false);
         swatchData.widthHint = SWATCH_WIDTH;
         swatchData.heightHint = SWATCH_HEIGHT;
         swatch.setLayoutData(swatchData);
-        swatch.setText(" ");
         swatch.setData("colorKey", key);
-        swatch.addListener(SWT.Selection, event -> openPreviewColorDialog(swatch));
+        swatch.addListener(SWT.MouseDown, event -> openPreviewColorDialog(swatch));
+        swatch.addPaintListener(event -> paintSwatch(event.gc, swatch));
         previewColorButtons.put(key, swatch);
         applyPreviewSwatchColor(swatch, key);
     }
 
     private void createPalettePreviewItem(Composite parent, String key) {
-        Button swatch = new Button(parent, SWT.PUSH);
+        Canvas swatch = new Canvas(parent, SWT.NONE);
         GridData swatchData = new GridData(SWT.LEFT, SWT.CENTER, false, false);
         swatchData.widthHint = SWATCH_WIDTH;
         swatchData.heightHint = SWATCH_HEIGHT;
         swatch.setLayoutData(swatchData);
-        swatch.setText(" ");
         swatch.setData("colorKey", key);
-        swatch.addListener(SWT.Selection, event -> openPreviewColorDialog(swatch));
+        swatch.addListener(SWT.MouseDown, event -> openPreviewColorDialog(swatch));
+        swatch.addPaintListener(event -> paintSwatch(event.gc, swatch));
         previewColorButtons.put(key, swatch);
         applyPreviewSwatchColor(swatch, key);
     }
 
-    private void applyPreviewSwatchColor(Button swatch, String key) {
+    private void paintSwatch(org.eclipse.swt.graphics.GC gc, Canvas swatch) {
+        if (gc == null || swatch == null || swatch.isDisposed()) {
+            return;
+        }
+        org.eclipse.swt.graphics.Rectangle area = swatch.getClientArea();
+        if (area.width <= 0 || area.height <= 0) {
+            return;
+        }
+        Color fill = (Color) swatch.getData("swatchColor");
+        if (fill != null && !fill.isDisposed()) {
+            gc.setBackground(fill);
+            gc.fillRectangle(1, 1, Math.max(0, area.width - 2), Math.max(0, area.height - 2));
+        }
+        gc.setForeground(swatch.getDisplay().getSystemColor(SWT.COLOR_WIDGET_NORMAL_SHADOW));
+        gc.drawRectangle(0, 0, Math.max(0, area.width - 1), Math.max(0, area.height - 1));
+    }
+
+    private void applyPreviewSwatchColor(Canvas swatch, String key) {
         String colorHex = previewColorValues.get(key);
         Color color = toColor(colorHex);
         if (color != null) {
-            swatch.setBackground(color);
             swatch.setData("swatchColor", color);
             swatch.setToolTipText(key + " " + colorHex);
+            swatch.redraw();
         }
     }
 
-    private void openPreviewColorDialog(Button swatch) {
+    private void openPreviewColorDialog(Canvas swatch) {
         if (swatch == null || swatch.isDisposed()) {
             return;
         }
@@ -407,11 +443,11 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
     }
 
     private void disposePreviewButtonColors() {
-        for (Button button : previewColorButtons.values()) {
-            if (button == null || button.isDisposed()) {
+        for (Canvas swatch : previewColorButtons.values()) {
+            if (swatch == null || swatch.isDisposed()) {
                 continue;
             }
-            Color color = (Color) button.getData("swatchColor");
+            Color color = (Color) swatch.getData("swatchColor");
             if (color != null && !color.isDisposed()) {
                 color.dispose();
             }
