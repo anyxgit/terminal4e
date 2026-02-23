@@ -69,6 +69,31 @@ public final class Messages extends NLS {
 	public static String TerminalPreference_RemoveConfirmTitle;
 	public static String TerminalPreference_RemoveConfirmMessage;
 
+	public static String TerminalThemePreference_Description;
+	public static String TerminalThemePreference_ModeFollowEclipse;
+	public static String TerminalThemePreference_SelectTheme;
+	public static String TerminalThemePreference_CustomizeSaveAs;
+	public static String TerminalThemePreference_CustomName;
+	public static String TerminalThemePreference_InvalidNameMessage;
+	public static String TerminalThemePreference_InvalidColorTitle;
+	public static String TerminalThemePreference_InvalidColorMessage;
+	public static String TerminalThemePreference_DuplicateNameTitle;
+	public static String TerminalThemePreference_DuplicateNameMessage;
+	public static String TerminalThemePreference_GeneralColors;
+	public static String TerminalThemePreference_PaletteColors;
+	public static String TerminalThemePreference_Presets;
+	public static String TerminalThemePreference_LoadPreset;
+	public static String TerminalThemePreference_TextColor;
+	public static String TerminalThemePreference_BackgroundColor;
+	public static String TerminalThemePreference_SelectionColor;
+	public static String TerminalThemePreference_SelectedTextColor;
+	public static String TerminalThemePreference_CursorColor;
+	public static String TerminalThemePreference_CursorAccentColor;
+	public static String TerminalThemePreference_ThemeBuiltin;
+	public static String TerminalThemePreference_ThemeCustom;
+	public static String TerminalThemePreference_ThemeLight;
+	public static String TerminalThemePreference_ThemeDark;
+
 	public static String Charset_Default;
 
 	public static String Shell_CommandPrompt;

@@ -18,9 +18,14 @@ public class Activator extends AbstractUIPlugin {
 	public static final String PREF_AUTO_OPEN_PROJECT_TERMINAL = "terminal.project.autoOpen";
 	public static final String PREF_RESTORE_SESSIONS = "terminal.sessions.restoreOnStartup";
 	public static final String PREF_SESSION_SNAPSHOT = "terminal.sessions.snapshot";
+	public static final String PREF_THEME_MODE = "terminal.theme.mode";
+	public static final String PREF_THEME_FIXED = "terminal.theme.fixed";
+	public static final String PREF_THEME_LIGHT = "terminal.theme.light";
+	public static final String PREF_THEME_DARK = "terminal.theme.dark";
+	public static final String PREF_THEME_CUSTOM = "terminal.theme.custom";
 
-    private static Activator plugin;
-    private static ILog logger;
+	private static Activator plugin;
+	private static ILog logger;
 
 	public Activator() {
 	}
@@ -45,8 +50,8 @@ public class Activator extends AbstractUIPlugin {
 	}
 
 	public static ILog getLogger() {
-        return logger;
-    }
+		return logger;
+	}
 
 	private void initializeDefaults() {
 		getPreferenceStore().setDefault(PREF_CHARSET, java.nio.charset.Charset.defaultCharset().name());
@@ -59,35 +64,40 @@ public class Activator extends AbstractUIPlugin {
 		getPreferenceStore().setDefault(PREF_AUTO_OPEN_PROJECT_TERMINAL, false);
 		getPreferenceStore().setDefault(PREF_RESTORE_SESSIONS, true);
 		getPreferenceStore().setDefault(PREF_SESSION_SNAPSHOT, "");
+		getPreferenceStore().setDefault(PREF_THEME_MODE, "follow");
+		getPreferenceStore().setDefault(PREF_THEME_FIXED, "vscode-dark-plus");
+		getPreferenceStore().setDefault(PREF_THEME_LIGHT, "vscode-light-plus");
+		getPreferenceStore().setDefault(PREF_THEME_DARK, "vscode-dark-plus");
+		getPreferenceStore().setDefault(PREF_THEME_CUSTOM, "");
 	}
 
 	private void initializeMessages() {
-        String lang = getPreferenceStore().getString(Activator.PREF_LANGUAGE);
-        logger.info("Initializing messages for language: " + lang);
+		String lang = getPreferenceStore().getString(Activator.PREF_LANGUAGE);
+		logger.info("Initializing messages for language: " + lang);
 
-        if (lang == null || lang.equals("auto")) {
-            NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class);
-            return;
-        }
+		if (lang == null || lang.equals("auto")) {
+			NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class);
+			return;
+		}
 
-        String[] parts = lang.split("_");
-        if (parts.length < 1) {
-            NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class);
-            return;
-        }
+		String[] parts = lang.split("_");
+		if (parts.length < 1) {
+			NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class);
+			return;
+		}
 
-        String language = parts[0];
-        String country = parts.length > 1 ? parts[1] : "";
-        String variant = parts.length > 2 ? parts[2] : "";
+		String language = parts[0];
+		String country = parts.length > 1 ? parts[1] : "";
+		String variant = parts.length > 2 ? parts[2] : "";
 
-        Locale locale = new Locale(language, country, variant);
-        Locale defaultLang = Locale.getDefault();
+		Locale locale = new Locale(language, country, variant);
+		Locale defaultLang = Locale.getDefault();
 
-        if (locale.equals(defaultLang)) {
-            NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class);
-            return;
-        }
+		if (locale.equals(defaultLang)) {
+			NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class);
+			return;
+		}
 
-        NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class, locale);
-    }
+		NLS.initializeMessages(Messages.BUNDLE_NAME, Messages.class, locale);
+	}
 }

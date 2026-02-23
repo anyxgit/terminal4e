@@ -3,12 +3,12 @@
 <plugin>
     <extension
         point="org.eclipse.ui.views">
-        
+
         <category
             id="me.anyx.terminal4e.ui.views.category"
             name="%view.category.name">
         </category>
-      
+
         <view
             id="me.anyx.terminal4e.ui.TerminalView"
             name="%view.name"
@@ -17,7 +17,7 @@
             class="me.anyx.terminal4e.ui.TerminalView">
         </view>
     </extension>
-    
+
     <!-- Preferences contributions -->
     <extension
         point="org.eclipse.ui.preferencePages">
@@ -25,6 +25,12 @@
             id="me.anyx.terminal4e.preferences"
             name="%preference.page.name"
             class="me.anyx.terminal4e.ui.TerminalPreferencePage">
+        </page>
+        <page
+            id="me.anyx.terminal4e.preferences.theme"
+            name="%preference.page.theme.name"
+            category="me.anyx.terminal4e.preferences"
+            class="me.anyx.terminal4e.ui.TerminalThemePreferencePage">
         </page>
     </extension>
     <extension
@@ -57,7 +63,7 @@
             commandId="me.anyx.terminal4e.ui.command.launchToolbar">
         </handler>
     </extension>
-    
+
     <!-- Menus contributions -->
     <extension
         point="org.eclipse.ui.menus">
@@ -110,8 +116,8 @@
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             sequence="CTRL+SHIFT+M3+T"/> <!-- Don't use M1 since COMMAND+Option T already taken on Mac -->
    </extension>
-   
-    <!-- Perspective extension contributions -->    
+
+    <!-- Perspective extension contributions -->
    <extension point="org.eclipse.ui.perspectiveExtensions">
       <perspectiveExtension targetID="org.eclipse.ui.resourcePerspective">
          <!-- Register the view shortcuts  -->
@@ -164,11 +170,11 @@
                visible="false">
          </view>
       </perspectiveExtension>
-      
+
       <perspectiveExtension targetID="*">
          <!-- Show In shortcut -->
          <showInPart id="me.anyx.terminal4e.ui.TerminalView"/>
       </perspectiveExtension>
    </extension>
-   
+
 </plugin>

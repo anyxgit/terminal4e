@@ -30,6 +30,8 @@ import org.eclipse.jface.dialogs.TitleAreaDialog;
 import org.eclipse.jface.layout.GridDataFactory;
 import org.eclipse.jface.layout.GridLayoutFactory;
 import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.util.IPropertyChangeListener;
+import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
@@ -60,8 +62,10 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.ISelectionService;
 import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.dialogs.PreferencesUtil;
 import org.eclipse.ui.part.ViewPart;
+import org.eclipse.ui.themes.IThemeManager;
 import org.osgi.framework.Bundle;
 
 import me.anyx.terminal4e.Activator;
@@ -83,6 +87,8 @@ public class TerminalView extends ViewPart {
 	private List<ShellDescriptor> shells;
 	private int sessionCounter = 1;
 	private Path extractedWebRoot;
+	private IPropertyChangeListener preferenceChangeListener;
+	private IPropertyChangeListener eclipseThemeChangeListener;
 
 	@Override
 	public void createPartControl(Composite parent) {
@@ -96,11 +102,54 @@ public class TerminalView extends ViewPart {
 		tabFolder.setSimple(false);
 		tabFolder.setUnselectedCloseVisible(true);
 		hookTabFolderEvents();
+		hookThemeListeners();
 
 		loadShells();
 		contributeToolbar();
 		if (!restoreSessionsIfNeeded()) {
 			createNewTab(resolveDefaultShell(), true, resolvePreferredWorkingDirectory());
+		}
+	}
+
+	private void hookThemeListeners() {
+		IPreferenceStore store = getPreferenceStore();
+		preferenceChangeListener = new IPropertyChangeListener() {
+			@Override
+			public void propertyChange(PropertyChangeEvent event) {
+				if (event == null || event.getProperty() == null) {
+					return;
+				}
+				if (!event.getProperty().startsWith("terminal.theme.")) {
+					return;
+				}
+				Display display = tabFolder == null ? null : tabFolder.getDisplay();
+				if (display == null || display.isDisposed()) {
+					return;
+				}
+				display.asyncExec(() -> applyThemeToAllTabs());
+			}
+		};
+		store.addPropertyChangeListener(preferenceChangeListener);
+
+		if (PlatformUI.isWorkbenchRunning()) {
+			IThemeManager themeManager = PlatformUI.getWorkbench().getThemeManager();
+			if (themeManager != null) {
+				eclipseThemeChangeListener = new IPropertyChangeListener() {
+					@Override
+					public void propertyChange(PropertyChangeEvent event) {
+					    if (!"org.eclipse.ui.workbench.HOVER_BACKGROUND".equals(event.getProperty())) {
+					        return;
+					    }
+						Display display = tabFolder == null ? null : tabFolder.getDisplay();
+						if (display == null || display.isDisposed()) {
+							return;
+						}
+//						System.out.println(event.getProperty() + ": " + event.getOldValue() + " -> " + event.getNewValue());
+						display.asyncExec(() -> applyThemeToAllTabs());
+					}
+				};
+				themeManager.addPropertyChangeListener(eclipseThemeChangeListener);
+			}
 		}
 	}
 
@@ -335,6 +384,7 @@ public class TerminalView extends ViewPart {
 				public Object function(Object[] arguments) {
 					tab.browserReady = true;
 					flushPendingOutput(tab);
+					applyThemeToBrowser(tab);
 					requestTerminalRefit(tab);
 					focusBrowser(tab);
 					return null;
@@ -437,6 +487,14 @@ public class TerminalView extends ViewPart {
 						return Boolean.valueOf(getPreferenceStore().getBoolean(Activator.PREF_CONFIRM_MULTILINE_PASTE));
 					}
 					return "";
+				}
+			};
+			tab.getThemeFunction = new BrowserFunction(tab.browser, "terminal4eGetTheme") {
+				@Override
+				public Object function(Object[] arguments) {
+					TerminalThemeStore.TerminalTheme theme = TerminalThemeStore
+							.resolveActiveTheme(getPreferenceStore());
+					return TerminalThemeStore.toJsonTheme(theme);
 				}
 			};
 			tab.readClipboardFunction = new BrowserFunction(tab.browser, "terminal4eReadClipboard") {
@@ -956,6 +1014,10 @@ public class TerminalView extends ViewPart {
 			tab.getPreferenceFunction.dispose();
 			tab.getPreferenceFunction = null;
 		}
+		if (tab.getThemeFunction != null) {
+			tab.getThemeFunction.dispose();
+			tab.getThemeFunction = null;
+		}
 		if (tab.readClipboardFunction != null) {
 			tab.readClipboardFunction.dispose();
 			tab.readClipboardFunction = null;
@@ -967,6 +1029,25 @@ public class TerminalView extends ViewPart {
 		if (tab.openLinkFunction != null) {
 			tab.openLinkFunction.dispose();
 			tab.openLinkFunction = null;
+		}
+	}
+
+	private void applyThemeToBrowser(TerminalTab tab) {
+		if (tab == null || tab.browser == null || tab.browser.isDisposed() || !tab.browserReady) {
+			return;
+		}
+		TerminalThemeStore.TerminalTheme theme = TerminalThemeStore.resolveActiveTheme(getPreferenceStore());
+		String themeJson = TerminalThemeStore.toJsonTheme(theme);
+		tab.browser.execute("window.terminal4eApplyTheme && window.terminal4eApplyTheme(" + themeJson + ");");
+	}
+
+	private void applyThemeToAllTabs() {
+		if (tabFolder == null || tabFolder.isDisposed()) {
+			return;
+		}
+		for (CTabItem item : tabFolder.getItems()) {
+			TerminalTab tab = (TerminalTab) item.getData("tab");
+			applyThemeToBrowser(tab);
 		}
 	}
 
@@ -1052,6 +1133,18 @@ public class TerminalView extends ViewPart {
 	@Override
 	public void dispose() {
 		updateSessionSnapshot();
+		IPreferenceStore store = getPreferenceStore();
+		if (store != null && preferenceChangeListener != null) {
+			store.removePropertyChangeListener(preferenceChangeListener);
+			preferenceChangeListener = null;
+		}
+		if (PlatformUI.isWorkbenchRunning() && eclipseThemeChangeListener != null) {
+			IThemeManager themeManager = PlatformUI.getWorkbench().getThemeManager();
+			if (themeManager != null) {
+				themeManager.removePropertyChangeListener(eclipseThemeChangeListener);
+			}
+			eclipseThemeChangeListener = null;
+		}
 		if (tabFolder != null && !tabFolder.isDisposed()) {
 			for (CTabItem item : tabFolder.getItems()) {
 				TerminalTab tab = (TerminalTab) item.getData("tab");
@@ -1433,6 +1526,7 @@ public class TerminalView extends ViewPart {
 		private BrowserFunction confirmMultilinePasteFunction;
 		private BrowserFunction getMessageFunction;
 		private BrowserFunction getPreferenceFunction;
+		private BrowserFunction getThemeFunction;
 		private BrowserFunction readClipboardFunction;
 		private BrowserFunction writeClipboardFunction;
 		private BrowserFunction openLinkFunction;

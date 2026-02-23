@@ -40,14 +40,38 @@
   <script src="node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
   <script type="text/javascript">
     (function () {
+      function getInitialTheme() {
+        if (window.terminal4eGetTheme) {
+          try {
+            const raw = window.terminal4eGetTheme();
+            if (raw && typeof raw === 'string') {
+              return JSON.parse(raw);
+            }
+            if (raw && typeof raw === 'object') {
+              return raw;
+            }
+          } catch (error) {
+            if (console && console.warn) {
+              console.warn('Failed to parse terminal theme from host.', error);
+            }
+          }
+        }
+        return {
+          background: '#1e1e1e',
+          foreground: '#d4d4d4',
+          cursor: '#aeafad',
+          cursorAccent: '#1e1e1e',
+          selectionBackground: '#264f78'
+        };
+      }
+
+      const activeTheme = getInitialTheme();
       const term = new Terminal({
         cursorBlink: true,
         convertEol: true,
         cols: 80,
         rows: 24,
-        theme: {
-          background: '#1e1e1e'
-        },
+        theme: activeTheme,
         allowProposedApi: true
       });
       const fitAddon = new FitAddon.FitAddon();
@@ -78,6 +102,19 @@
       const terminalElement = document.getElementById('terminal');
       term.open(terminalElement);
       fitAddon.fit();
+
+      function applyTheme(theme) {
+        if (!theme || typeof theme !== 'object') {
+          return;
+        }
+        term.options.theme = theme;
+        if (theme.background) {
+          document.body.style.background = theme.background;
+          document.documentElement.style.background = theme.background;
+        }
+      }
+
+      applyTheme(activeTheme);
 
       function hasUsableViewport() {
         const width = terminalElement.clientWidth || 0;
@@ -133,6 +170,10 @@
 
       window.terminal4eRefit = function () {
         fitAndNotifyIfReady();
+      };
+
+      window.terminal4eApplyTheme = function (theme) {
+        applyTheme(theme);
       };
 
       function getI18nMessage(key) {
