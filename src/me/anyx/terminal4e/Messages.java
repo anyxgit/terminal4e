@@ -79,6 +79,9 @@ public final class Messages extends NLS {
 	public static String TerminalThemePreference_InvalidColorMessage;
 	public static String TerminalThemePreference_DuplicateNameTitle;
 	public static String TerminalThemePreference_DuplicateNameMessage;
+	public static String TerminalThemePreference_OnlyCustomEditable;
+	public static String TerminalThemePreference_OnlyCustomDeletable;
+	public static String TerminalThemePreference_DeleteConfirmMessage;
 	public static String TerminalThemePreference_GeneralColors;
 	public static String TerminalThemePreference_PaletteColors;
 	public static String TerminalThemePreference_Presets;

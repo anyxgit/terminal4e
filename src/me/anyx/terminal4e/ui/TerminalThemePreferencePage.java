@@ -28,6 +28,7 @@ import org.eclipse.ui.dialogs.PreferencesUtil;
 
 import me.anyx.terminal4e.Activator;
 import me.anyx.terminal4e.Messages;
+import me.anyx.terminal4e.NLS;
 
 public class TerminalThemePreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
     private static final int SWATCH_WIDTH = 48;
@@ -131,7 +132,7 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
 
         Composite saveRow = new Composite(group, SWT.NONE);
         saveRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 2, 1));
-        GridLayout saveLayout = new GridLayout(3, false);
+        GridLayout saveLayout = new GridLayout(5, false);
         saveLayout.marginWidth = 0;
         saveLayout.marginHeight = 0;
         saveLayout.horizontalSpacing = COMPACT_SPACING;
@@ -144,6 +145,14 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
         Button saveCustomButton = new Button(saveRow, SWT.PUSH);
         saveCustomButton.setText(Messages.TerminalThemePreference_CustomizeSaveAs);
         saveCustomButton.addListener(SWT.Selection, e -> saveCurrentAsCustomTheme());
+
+        Button editCustomButton = new Button(saveRow, SWT.PUSH);
+        editCustomButton.setText(Messages.TerminalPreference_Edit);
+        editCustomButton.addListener(SWT.Selection, e -> updateCurrentCustomTheme());
+
+        Button deleteCustomButton = new Button(saveRow, SWT.PUSH);
+        deleteCustomButton.setText(Messages.TerminalPreference_Remove);
+        deleteCustomButton.addListener(SWT.Selection, e -> deleteCurrentCustomTheme());
 
         Composite fontRow = new Composite(group, SWT.NONE);
         fontRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 2, 1));
@@ -275,10 +284,102 @@ public class TerminalThemePreferencePage extends PreferencePage implements IWork
         refreshPreview();
     }
 
+    private void updateCurrentCustomTheme() {
+        if (!isSelectedCustomTheme()) {
+            MessageDialog.openInformation(getShell(), Messages.TerminalThemePreference_InvalidColorTitle,
+                    Messages.TerminalThemePreference_OnlyCustomEditable);
+            return;
+        }
+
+        String name = customThemeNameText == null ? "" : customThemeNameText.getText().trim();
+        if (name.isEmpty()) {
+            MessageDialog.openWarning(getShell(), Messages.TerminalThemePreference_InvalidColorTitle,
+                    Messages.TerminalThemePreference_InvalidNameMessage);
+            return;
+        }
+
+        TerminalThemeStore.TerminalTheme current = themesById.get(selectedThemeId);
+        if (current == null) {
+            return;
+        }
+
+        for (TerminalThemeStore.TerminalTheme theme : themesById.values()) {
+            if (theme == null || theme.getId().equals(current.getId())) {
+                continue;
+            }
+            if (theme.getName().equalsIgnoreCase(name)) {
+                MessageDialog.openWarning(getShell(), Messages.TerminalThemePreference_DuplicateNameTitle,
+                        Messages.TerminalThemePreference_DuplicateNameMessage);
+                return;
+            }
+        }
+
+        for (Map.Entry<String, String> entry : previewColorValues.entrySet()) {
+            if (!TerminalThemeStore.isValidHexColor(entry.getValue())) {
+                MessageDialog.openWarning(getShell(), Messages.TerminalThemePreference_InvalidColorTitle,
+                        Messages.TerminalThemePreference_InvalidColorMessage + " " + entry.getKey());
+                return;
+            }
+        }
+
+        TerminalThemeStore.TerminalTheme updated = new TerminalThemeStore.TerminalTheme(current.getId(), name,
+                current.isDark(), false, new LinkedHashMap<>(previewColorValues));
+
+        for (int index = 0; index < customThemes.size(); index++) {
+            TerminalThemeStore.TerminalTheme theme = customThemes.get(index);
+            if (theme != null && current.getId().equals(theme.getId())) {
+                customThemes.set(index, updated);
+                break;
+            }
+        }
+        themesById.put(updated.getId(), updated);
+        selectedThemeId = updated.getId();
+
+        refillThemeSelector();
+        loadPreviewColorsFromSelection();
+        resetCustomThemeName();
+        refreshPreview();
+    }
+
+    private void deleteCurrentCustomTheme() {
+        if (!isSelectedCustomTheme()) {
+            MessageDialog.openInformation(getShell(), Messages.TerminalThemePreference_InvalidColorTitle,
+                    Messages.TerminalThemePreference_OnlyCustomDeletable);
+            return;
+        }
+        TerminalThemeStore.TerminalTheme current = themesById.get(selectedThemeId);
+        if (current == null) {
+            return;
+        }
+
+        boolean confirm = MessageDialog.openQuestion(getShell(), Messages.TerminalPreference_RemoveConfirmTitle,
+            NLS.bind(Messages.TerminalThemePreference_DeleteConfirmMessage, current.getName()));
+        if (!confirm) {
+            return;
+        }
+
+        customThemes.removeIf(theme -> theme != null && current.getId().equals(theme.getId()));
+        themesById.remove(current.getId());
+        selectedThemeId = FOLLOW_OPTION_ID;
+
+        refillThemeSelector();
+        loadPreviewColorsFromSelection();
+        resetCustomThemeName();
+        refreshPreview();
+    }
+
+    private boolean isSelectedCustomTheme() {
+        if (selectedThemeId == null || FOLLOW_OPTION_ID.equals(selectedThemeId)) {
+            return false;
+        }
+        TerminalThemeStore.TerminalTheme theme = themesById.get(selectedThemeId);
+        return theme != null && !theme.isBuiltin();
+    }
+
     private TerminalThemeStore.TerminalTheme resolveSelectedThemeForPreview() {
         TerminalThemeStore.TerminalTheme theme;
         if (FOLLOW_OPTION_ID.equals(selectedThemeId)) {
-            theme = TerminalThemeStore.resolveActiveTheme(null);
+            theme = TerminalThemeStore.resolveActiveTheme(getPreferenceStore());
         } else {
             theme = themesById.get(selectedThemeId);
         }
